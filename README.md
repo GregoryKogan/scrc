@@ -29,4 +29,8 @@ docker build --build-arg GO_VERSION=1.26.0 -t scrc .
 docker compose up --build
 ```
 
-Docker Compose uses the same socket mount to expose the host Docker daemon to the container.
+This spins up a single-node Kafka cluster, a mock producer container that
+publishes sample Python scripts to Kafka, and the runner service that consumes
+them and executes each script inside Docker. The runner stops after processing
+the number of scripts specified via the `SCRIPT_EXPECTED` environment variable
+(defaults to `2`).
