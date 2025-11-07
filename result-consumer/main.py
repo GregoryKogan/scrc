@@ -47,6 +47,7 @@ def format_result(record_key: str | None, payload: dict) -> str:
     stderr = payload.get("stderr", "").rstrip()
     error = payload.get("error")
     timestamp = payload.get("timestamp")
+    tests = payload.get("tests") or []
 
     lines = [f"[{timestamp}] script {script_id!r}"]
 
@@ -64,6 +65,43 @@ def format_result(record_key: str | None, payload: dict) -> str:
     if stderr:
         lines.append("  stderr:")
         lines.extend(f"    {line}" for line in stderr.splitlines())
+    if tests:
+        lines.append("  tests:")
+        for test in tests:
+            number = test.get("number")
+            test_status = test.get("status")
+            test_exit = test.get("exit_code")
+            test_duration = test.get("duration_ms")
+            test_input = (test.get("input") or "").rstrip("\n")
+            test_expected = (test.get("expected_output") or "").rstrip("\n")
+            test_stdout = (test.get("stdout") or "").rstrip("\n")
+            test_stderr = (test.get("stderr") or "").rstrip("\n")
+            test_error = test.get("error")
+
+            header_parts = []
+            if number is not None:
+                header_parts.append(f"test {number}")
+            else:
+                header_parts.append("test")
+            if test_status:
+                header_parts.append(f"status={test_status}")
+            if test_duration is not None:
+                header_parts.append(f"duration_ms={test_duration}")
+            if test_exit is not None:
+                header_parts.append(f"exit_code={test_exit}")
+
+            lines.append(f"    {' '.join(header_parts)}")
+
+            if test_input:
+                lines.append(f"      input: {test_input!r}")
+            if test_expected:
+                lines.append(f"      expected: {test_expected!r}")
+            if test_stdout:
+                lines.append(f"      stdout: {test_stdout!r}")
+            if test_stderr:
+                lines.append(f"      stderr: {test_stderr!r}")
+            if test_error:
+                lines.append(f"      error: {test_error}")
 
     return "\n".join(lines)
 

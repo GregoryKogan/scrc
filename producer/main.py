@@ -36,10 +36,20 @@ def create_producer(broker: str) -> KafkaProducer:
 
 
 def build_scenarios() -> list[dict]:
-    stomp_cpu_script = "\n".join(
+    sum_script = "\n".join(
         [
-            "import datetime",
-            "print('Quick script executed at', datetime.datetime.now(datetime.timezone.utc).isoformat())",
+            "import sys",
+            "",
+            "def main() -> None:",
+            "    data = sys.stdin.read().strip()",
+            "    if not data:",
+            "        print('0')",
+            "        return",
+            "    total = sum(int(part) for part in data.split())",
+            "    print(total)",
+            "",
+            "if __name__ == '__main__':",
+            "    main()",
         ]
     )
 
@@ -65,11 +75,23 @@ def build_scenarios() -> list[dict]:
     return [
         {
             "base_id": "script-ok",
-            "source": stomp_cpu_script,
+            "source": sum_script,
             "limits": {
                 "time_limit_ms": 2_000,
                 "memory_limit_bytes": 256 * 1024 * 1024,
             },
+            "tests": [
+                {
+                    "number": 1,
+                    "input": "1 2 3\n",
+                    "expected_output": "6\n",
+                },
+                {
+                    "number": 2,
+                    "input": "10 -5 7\n",
+                    "expected_output": "12\n",
+                },
+            ],
         },
         {
             "base_id": "script-tl",
@@ -78,6 +100,13 @@ def build_scenarios() -> list[dict]:
                 "time_limit_ms": 1_000,
                 "memory_limit_bytes": 256 * 1024 * 1024,
             },
+            "tests": [
+                {
+                    "number": 1,
+                    "input": "",
+                    "expected_output": "About to nap for a bit...\n",
+                }
+            ],
         },
         {
             "base_id": "script-ml",
@@ -86,6 +115,13 @@ def build_scenarios() -> list[dict]:
                 "time_limit_ms": 5_000,
                 "memory_limit_bytes": 32 * 1024 * 1024,
             },
+            "tests": [
+                {
+                    "number": 1,
+                    "input": "",
+                    "expected_output": "Allocating memory...\n",
+                }
+            ],
         },
     ]
 
@@ -100,6 +136,7 @@ def stream_scripts(interval_s: float = 1.0):
                 "id": f"{scenario['base_id']}-{iteration}",
                 "source": scenario["source"],
                 "limits": scenario["limits"],
+                "tests": scenario["tests"],
             }
         iteration += 1
         time.sleep(interval_s)
