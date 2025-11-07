@@ -25,7 +25,7 @@ func NewService() *Service {
 			},
 			{
 				ID:     "time",
-				Source: "import datetime\nprint('Current time:', datetime.datetime.utcnow().isoformat())\n",
+				Source: "import datetime\nprint('Current time:', datetime.datetime.now(datetime.timezone.utc).isoformat())\n",
 			},
 		},
 	}
