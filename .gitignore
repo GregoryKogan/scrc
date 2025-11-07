@@ -1,0 +1,17 @@
+# Go build outputs
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Local binaries
+scrc
+bin/
+
+# Temporary files
+*.log
+*.tmp
+
