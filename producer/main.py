@@ -32,33 +32,47 @@ def create_producer(broker: str) -> KafkaProducer:
             backoff = min(backoff * 1.5, max_backoff)
 
 
+def stream_scripts(interval_s: float = 1.0):
+    counter = 1
+    while True:
+        yield {
+            "type": "script",
+            "id": f"script-{counter}",
+            "source": (
+                "import datetime\n"
+                "print('Streaming script {counter} at', datetime.datetime.now(datetime.timezone.utc).isoformat())\n"
+            ).format(counter=counter),
+        }
+        counter += 1
+        time.sleep(interval_s)
+
+
 def main() -> None:
     broker = os.environ.get("KAFKA_BROKER", "kafka:9092")
     topic = os.environ.get("KAFKA_TOPIC", "scripts")
+    raw_interval = os.environ.get("SCRIPT_INTERVAL_SECONDS", "1.0")
+    try:
+        interval = float(raw_interval)
+        if interval < 0:
+            raise ValueError("negative interval")
+    except ValueError:
+        print(
+            f"invalid SCRIPT_INTERVAL_SECONDS value {raw_interval!r}; defaulting to 1.0",
+            file=sys.stderr,
+        )
+        interval = 1.0
 
     producer = create_producer(broker)
 
-    scripts = [
-        {
-            "type": "script",
-            "id": "hello",
-            "source": "print('Hello from Python inside Docker!')\n",
-        },
-        {
-            "type": "script",
-            "id": "time",
-            "source": "import datetime\nprint('Current time:', datetime.datetime.now(datetime.timezone.utc).isoformat())\n",
-        },
-    ]
-
-    for script in scripts:
-        producer.send(topic, key=script["id"], value=script)
+    try:
+        for script in stream_scripts(interval):
+            future = producer.send(topic, key=script["id"], value=script)
+            future.get(timeout=30)
+    except KeyboardInterrupt:
+        print("stopping script stream", file=sys.stderr)
+    finally:
         producer.flush()
-        time.sleep(0.1)
-
-    producer.send(topic, key="__control__", value={"type": "done"})
-    producer.flush()
-    producer.close()
+        producer.close()
 
 
 if __name__ == "__main__":

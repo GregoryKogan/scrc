@@ -30,7 +30,11 @@ docker compose up --build
 ```
 
 This spins up a single-node Kafka cluster, a mock producer container that
-publishes sample Python scripts to Kafka, and the runner service that consumes
-them and executes each script inside Docker. The runner stops after processing
-the number of scripts specified via the `SCRIPT_EXPECTED` environment variable
-(defaults to `2`).
+continuously streams Python scripts to Kafka, and the runner service that
+consumes them and executes each script inside Docker. The runner keeps
+processing scripts until it is stopped or its container is terminated. You can
+optionally limit how many scripts to execute by setting the `SCRIPT_EXPECTED`
+environment variable on the runner service.
+
+The producer emits a new script roughly once per second by default; change the
+cadence by setting `SCRIPT_INTERVAL_SECONDS` on the producer container.

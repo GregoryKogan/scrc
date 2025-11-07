@@ -30,30 +30,41 @@ func (s *Service) ExecutePython(ctx context.Context, source string) (*execution.
 // If maxScripts is greater than zero the execution stops after the specified
 // number of scripts has been processed. Otherwise it keeps consuming until the
 // context is cancelled or the producer signals completion via io.EOF.
-func (s *Service) ExecuteFromProducer(ctx context.Context, producer ports.ScriptProducer, maxScripts int) ([]execution.RunReport, error) {
-	reports := make([]execution.RunReport, 0)
+//
+// When onReport is provided it is invoked after every script execution with
+// the corresponding run report.
+func (s *Service) ExecuteFromProducer(
+	ctx context.Context,
+	producer ports.ScriptProducer,
+	maxScripts int,
+	onReport func(execution.RunReport),
+) error {
 	processed := 0
 
 	for {
 		if maxScripts > 0 && processed >= maxScripts {
-			return reports, nil
+			return nil
 		}
 
 		script, err := producer.NextScript(ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, io.EOF) {
-				return reports, nil
+				return nil
 			}
 
-			return reports, fmt.Errorf("get next script: %w", err)
+			return fmt.Errorf("get next script: %w", err)
 		}
 
 		result, runErr := s.runtime.RunPython(ctx, script.Source)
-		reports = append(reports, execution.RunReport{
+		report := execution.RunReport{
 			Script: script,
 			Result: result,
 			Err:    runErr,
-		})
+		}
+
+		if onReport != nil {
+			onReport(report)
+		}
 
 		processed++
 	}

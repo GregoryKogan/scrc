@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"scrc/internal/app/executor"
+	"scrc/internal/domain/execution"
 	"scrc/internal/infra/docker"
 	kafkainfra "scrc/internal/infra/kafka"
 )
@@ -23,8 +26,8 @@ const (
 )
 
 func main() {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	runtime, err := docker.New(docker.Config{
 		Image:   dockerImage,
@@ -55,25 +58,27 @@ func main() {
 		}
 	}()
 
-	reports, err := service.ExecuteFromProducer(ctx, consumer, parseMaxScripts(os.Getenv("SCRIPT_EXPECTED")))
-	if err != nil {
+	if err := service.ExecuteFromProducer(
+		ctx,
+		consumer,
+		parseMaxScripts(os.Getenv("SCRIPT_EXPECTED")),
+		func(report execution.RunReport) {
+			if report.Err != nil {
+				log.Printf("script %q failed: %v", report.Script.ID, report.Err)
+				return
+			}
+
+			result := report.Result
+			fmt.Printf("script %q exited with status %d after %s\n", report.Script.ID, result.ExitCode, result.Duration.Round(time.Millisecond))
+			if result.Stdout != "" {
+				fmt.Print(result.Stdout)
+			}
+			if result.Stderr != "" {
+				fmt.Fprint(log.Writer(), result.Stderr)
+			}
+		},
+	); err != nil {
 		log.Fatalf("failed to execute scripts: %v", err)
-	}
-
-	for _, report := range reports {
-		if report.Err != nil {
-			log.Printf("script %q failed: %v", report.Script.ID, report.Err)
-			continue
-		}
-
-		result := report.Result
-		fmt.Printf("script %q exited with status %d after %s\n", report.Script.ID, result.ExitCode, result.Duration.Round(time.Millisecond))
-		if result.Stdout != "" {
-			fmt.Print(result.Stdout)
-		}
-		if result.Stderr != "" {
-			fmt.Fprint(log.Writer(), result.Stderr)
-		}
 	}
 }
 
