@@ -49,6 +49,7 @@ services:
       - KAFKA_BROKERS=kafka:9092
       - KAFKA_TOPIC=scripts
       - KAFKA_GROUP_ID=scrc-runner
+      - KAFKA_RESULTS_TOPIC=script-results
 
   scrc-producer:
     build: ./producer
@@ -58,4 +59,14 @@ services:
     environment:
       - KAFKA_BROKER=kafka:9092
       - KAFKA_TOPIC=scripts
+
+  scrc-results-consumer:
+    build: ./result-consumer
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      - KAFKA_BROKER=kafka:9092
+      - KAFKA_RESULTS_TOPIC=script-results
+      - KAFKA_CONSUMER_GROUP=scrc-results-consumer
 
