@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import sys
@@ -26,24 +27,81 @@ def create_producer(broker: str) -> KafkaProducer:
             )
         except NoBrokersAvailable as exc:
             if time.time() >= deadline:
-                raise RuntimeError("failed to connect to Kafka broker within 60 seconds") from exc
+                raise RuntimeError(
+                    "failed to connect to Kafka broker within 60 seconds"
+                ) from exc
 
             time.sleep(backoff)
             backoff = min(backoff * 1.5, max_backoff)
 
 
+def build_scenarios() -> list[dict]:
+    stomp_cpu_script = "\n".join(
+        [
+            "import datetime",
+            "print('Quick script executed at', datetime.datetime.now(datetime.timezone.utc).isoformat())",
+        ]
+    )
+
+    time_limit_script = "\n".join(
+        [
+            "import time",
+            "print('About to nap for a bit...')",
+            "time.sleep(2.5)",
+            "print('Woke up!')",
+        ]
+    )
+
+    memory_limit_script = "\n".join(
+        [
+            "print('Allocating memory...')",
+            "blocks = []",
+            "for _ in range(128):",
+            "    blocks.append(bytearray(1024 * 1024))  # 1 MiB per block",
+            "print('Allocated', len(blocks), 'MiB successfully')",
+        ]
+    )
+
+    return [
+        {
+            "base_id": "script-ok",
+            "source": stomp_cpu_script,
+            "limits": {
+                "time_limit_ms": 2_000,
+                "memory_limit_bytes": 256 * 1024 * 1024,
+            },
+        },
+        {
+            "base_id": "script-tl",
+            "source": time_limit_script,
+            "limits": {
+                "time_limit_ms": 1_000,
+                "memory_limit_bytes": 256 * 1024 * 1024,
+            },
+        },
+        {
+            "base_id": "script-ml",
+            "source": memory_limit_script,
+            "limits": {
+                "time_limit_ms": 5_000,
+                "memory_limit_bytes": 32 * 1024 * 1024,
+            },
+        },
+    ]
+
+
 def stream_scripts(interval_s: float = 1.0):
-    counter = 1
+    scenarios = build_scenarios()
+    iteration = 1
     while True:
-        yield {
-            "type": "script",
-            "id": f"script-{counter}",
-            "source": (
-                "import datetime\n"
-                "print('Streaming script {counter} at', datetime.datetime.now(datetime.timezone.utc).isoformat())\n"
-            ).format(counter=counter),
-        }
-        counter += 1
+        for scenario in scenarios:
+            yield {
+                "type": "script",
+                "id": f"{scenario['base_id']}-{iteration}",
+                "source": scenario["source"],
+                "limits": scenario["limits"],
+            }
+        iteration += 1
         time.sleep(interval_s)
 
 
@@ -77,4 +135,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
