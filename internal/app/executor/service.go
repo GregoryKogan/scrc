@@ -2,7 +2,9 @@ package executor
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 
 	"scrc/internal/domain/execution"
 	"scrc/internal/ports"
@@ -24,23 +26,37 @@ func (s *Service) ExecutePython(ctx context.Context, source string) (*execution.
 }
 
 // ExecuteFromProducer pulls scripts from the supplied producer and runs them sequentially.
-func (s *Service) ExecuteFromProducer(ctx context.Context, producer ports.ScriptProducer) ([]execution.RunReport, error) {
-	scripts, err := producer.ProduceScripts(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("get scripts: %w", err)
-	}
+//
+// If maxScripts is greater than zero the execution stops after the specified
+// number of scripts has been processed. Otherwise it keeps consuming until the
+// context is cancelled or the producer signals completion via io.EOF.
+func (s *Service) ExecuteFromProducer(ctx context.Context, producer ports.ScriptProducer, maxScripts int) ([]execution.RunReport, error) {
+	reports := make([]execution.RunReport, 0)
+	processed := 0
 
-	reports := make([]execution.RunReport, 0, len(scripts))
-	for _, script := range scripts {
+	for {
+		if maxScripts > 0 && processed >= maxScripts {
+			return reports, nil
+		}
+
+		script, err := producer.NextScript(ctx)
+		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, io.EOF) {
+				return reports, nil
+			}
+
+			return reports, fmt.Errorf("get next script: %w", err)
+		}
+
 		result, runErr := s.runtime.RunPython(ctx, script.Source)
 		reports = append(reports, execution.RunReport{
 			Script: script,
 			Result: result,
 			Err:    runErr,
 		})
-	}
 
-	return reports, nil
+		processed++
+	}
 }
 
 // Close releases any resources owned by the underlying runtime.
