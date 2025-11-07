@@ -22,7 +22,12 @@ func NewService(runtime ports.PythonRunner) *Service {
 
 // ExecutePython runs the supplied Python source and returns execution details.
 func (s *Service) ExecutePython(ctx context.Context, source string) (*execution.Result, error) {
-	return s.runtime.RunPython(ctx, source)
+	return s.ExecutePythonWithLimits(ctx, source, execution.RunLimits{})
+}
+
+// ExecutePythonWithLimits runs the supplied Python source with the provided resource limits.
+func (s *Service) ExecutePythonWithLimits(ctx context.Context, source string, limits execution.RunLimits) (*execution.Result, error) {
+	return s.runtime.RunPython(ctx, source, limits)
 }
 
 // ExecuteFromProducer pulls scripts from the supplied producer and runs them sequentially.
@@ -55,7 +60,7 @@ func (s *Service) ExecuteFromProducer(
 			return fmt.Errorf("get next script: %w", err)
 		}
 
-		result, runErr := s.runtime.RunPython(ctx, script.Source)
+		result, runErr := s.runtime.RunPython(ctx, script.Source, script.Limits)
 		report := execution.RunReport{
 			Script: script,
 			Result: result,

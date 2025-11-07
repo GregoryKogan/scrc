@@ -30,7 +30,9 @@ def create_consumer(broker: str, topic: str, group_id: str) -> KafkaConsumer:
             )
         except NoBrokersAvailable as exc:
             if time.time() >= deadline:
-                raise RuntimeError("failed to connect to Kafka broker within 60 seconds") from exc
+                raise RuntimeError(
+                    "failed to connect to Kafka broker within 60 seconds"
+                ) from exc
 
             time.sleep(backoff)
             backoff = min(backoff * 1.5, max_backoff)
@@ -38,6 +40,7 @@ def create_consumer(broker: str, topic: str, group_id: str) -> KafkaConsumer:
 
 def format_result(record_key: str | None, payload: dict) -> str:
     script_id = payload.get("id") or record_key or "<unknown>"
+    status = payload.get("status")
     exit_code = payload.get("exit_code")
     duration_ms = payload.get("duration_ms")
     stdout = payload.get("stdout", "").rstrip()
@@ -47,6 +50,8 @@ def format_result(record_key: str | None, payload: dict) -> str:
 
     lines = [f"[{timestamp}] script {script_id!r}"]
 
+    if status:
+        lines.append(f"  status: {status}")
     if exit_code is not None:
         lines.append(f"  exit_code: {exit_code}")
     if duration_ms is not None:
@@ -84,4 +89,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

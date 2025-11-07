@@ -100,7 +100,17 @@ func (c *Consumer) NextScript(ctx context.Context) (execution.Script, error) {
 			scriptID = fmt.Sprintf("%s:%d", msg.Topic, msg.Offset)
 		}
 
-		return execution.Script{ID: scriptID, Source: envelope.Source}, nil
+		limits := execution.RunLimits{}
+		if envelope.Limits != nil {
+			if envelope.Limits.TimeLimitMs > 0 {
+				limits.TimeLimit = time.Duration(envelope.Limits.TimeLimitMs) * time.Millisecond
+			}
+			if envelope.Limits.MemoryLimitBytes > 0 {
+				limits.MemoryLimitBytes = envelope.Limits.MemoryLimitBytes
+			}
+		}
+
+		return execution.Script{ID: scriptID, Source: envelope.Source, Limits: limits}, nil
 	case messageTypeDone:
 		return execution.Script{}, io.EOF
 	default:
@@ -114,7 +124,13 @@ func (c *Consumer) Close() error {
 }
 
 type scriptEnvelope struct {
-	Type   string `json:"type"`
-	ID     string `json:"id"`
-	Source string `json:"source"`
+	Type   string        `json:"type"`
+	ID     string        `json:"id"`
+	Source string        `json:"source"`
+	Limits *scriptLimits `json:"limits,omitempty"`
+}
+
+type scriptLimits struct {
+	TimeLimitMs      int64 `json:"time_limit_ms"`
+	MemoryLimitBytes int64 `json:"memory_limit_bytes"`
 }

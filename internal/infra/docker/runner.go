@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -24,14 +25,16 @@ type Runner struct {
 	cli      *client.Client
 	image    string
 	workdir  string
+	limits   execution.RunLimits
 	pullOnce sync.Once
 	pullErr  error
 }
 
 // Config describes how to create a new Runner service.
 type Config struct {
-	Image   string
-	Workdir string
+	Image         string
+	Workdir       string
+	DefaultLimits execution.RunLimits
 }
 
 // New creates a new Runner using the provided configuration.
@@ -52,6 +55,7 @@ func New(cfg Config) (*Runner, error) {
 		cli:     cli,
 		image:   cfg.Image,
 		workdir: cfg.Workdir,
+		limits:  normalizeLimits(cfg.DefaultLimits),
 	}, nil
 }
 
@@ -64,12 +68,14 @@ func (r *Runner) Close() error {
 }
 
 // RunPython executes the provided Python source inside a new container instance.
-func (r *Runner) RunPython(ctx context.Context, source string) (*execution.Result, error) {
+func (r *Runner) RunPython(ctx context.Context, source string, limits execution.RunLimits) (*execution.Result, error) {
 	if err := r.ensureImage(ctx); err != nil {
 		return nil, err
 	}
 
-	containerID, cleanup, err := r.createContainer(ctx)
+	effectiveLimits := r.effectiveLimits(limits)
+
+	containerID, cleanup, err := r.createContainer(ctx, effectiveLimits)
 	if err != nil {
 		return nil, err
 	}
@@ -84,22 +90,55 @@ func (r *Runner) RunPython(ctx context.Context, source string) (*execution.Resul
 		return nil, fmt.Errorf("start container: %w", err)
 	}
 
-	status, err := r.waitForExit(ctx, containerID)
+	waitCtx := ctx
+	var cancel context.CancelFunc
+	if effectiveLimits.TimeLimit > 0 {
+		waitCtx, cancel = context.WithTimeout(ctx, effectiveLimits.TimeLimit)
+	}
+	status, err := r.waitForExit(waitCtx, containerID)
+	if cancel != nil {
+		cancel()
+	}
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) && effectiveLimits.TimeLimit > 0 && ctx.Err() == nil {
+			return r.handleTimeLimit(containerID, start)
+		}
 		return nil, err
 	}
 
-	stdout, stderr, err := r.fetchLogs(ctx, containerID)
+	inspectCtx := ctx
+	if inspectCtx.Err() != nil {
+		inspectCtx = context.Background()
+	}
+
+	inspect, err := r.cli.ContainerInspect(inspectCtx, containerID)
+	if err != nil {
+		return nil, fmt.Errorf("inspect container: %w", err)
+	}
+
+	logCtx := ctx
+	if logCtx.Err() != nil {
+		logCtx = context.Background()
+	}
+
+	stdout, stderr, err := r.fetchLogs(logCtx, containerID)
 	if err != nil {
 		return nil, fmt.Errorf("fetch logs: %w", err)
 	}
 
-	return &execution.Result{
+	result := &execution.Result{
+		Status:   execution.StatusOK,
 		Stdout:   stdout,
 		Stderr:   stderr,
 		ExitCode: status.StatusCode,
 		Duration: time.Since(start),
-	}, nil
+	}
+
+	if inspect.State != nil && inspect.State.OOMKilled {
+		result.Status = execution.StatusMemoryLimit
+	}
+
+	return result, nil
 }
 
 func (r *Runner) ensureImage(ctx context.Context) error {
@@ -118,7 +157,17 @@ func (r *Runner) ensureImage(ctx context.Context) error {
 	return r.pullErr
 }
 
-func (r *Runner) createContainer(ctx context.Context) (string, func(), error) {
+func (r *Runner) createContainer(ctx context.Context, limits execution.RunLimits) (string, func(), error) {
+	hostConfig := &container.HostConfig{
+		Resources: container.Resources{
+			NanoCPUs: 1_000_000_000,
+		},
+	}
+	if limits.MemoryLimitBytes > 0 {
+		hostConfig.Resources.Memory = limits.MemoryLimitBytes
+		hostConfig.Resources.MemorySwap = limits.MemoryLimitBytes
+	}
+
 	resp, err := r.cli.ContainerCreate(
 		ctx,
 		&container.Config{
@@ -128,7 +177,7 @@ func (r *Runner) createContainer(ctx context.Context) (string, func(), error) {
 			AttachStderr: true,
 			WorkingDir:   r.workdir,
 		},
-		nil,
+		hostConfig,
 		nil,
 		nil,
 		"",
@@ -142,6 +191,65 @@ func (r *Runner) createContainer(ctx context.Context) (string, func(), error) {
 	}
 
 	return resp.ID, cleanup, nil
+}
+
+func (r *Runner) effectiveLimits(request execution.RunLimits) execution.RunLimits {
+	effective := normalizeLimits(r.limits)
+	overrides := normalizeLimits(request)
+
+	if overrides.TimeLimit > 0 {
+		effective.TimeLimit = overrides.TimeLimit
+	}
+	if overrides.MemoryLimitBytes > 0 {
+		effective.MemoryLimitBytes = overrides.MemoryLimitBytes
+	}
+
+	return effective
+}
+
+func (r *Runner) handleTimeLimit(containerID string, start time.Time) (*execution.Result, error) {
+	stopCtx, cancelStop := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelStop()
+
+	if err := r.cli.ContainerStop(stopCtx, containerID, container.StopOptions{}); err != nil && !client.IsErrNotFound(err) {
+		return nil, fmt.Errorf("stop container after time limit: %w", err)
+	}
+
+	waitCtx, cancelWait := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancelWait()
+
+	status, waitErr := r.waitForExit(waitCtx, containerID)
+	if waitErr != nil && !errors.Is(waitErr, context.DeadlineExceeded) && !client.IsErrNotFound(waitErr) {
+		return nil, fmt.Errorf("wait for container after time limit: %w", waitErr)
+	}
+
+	stdout, stderr, err := r.fetchLogs(context.Background(), containerID)
+	if err != nil {
+		return nil, fmt.Errorf("fetch logs: %w", err)
+	}
+
+	exitCode := int64(-1)
+	if status != nil {
+		exitCode = status.StatusCode
+	}
+
+	return &execution.Result{
+		Status:   execution.StatusTimeLimit,
+		Stdout:   stdout,
+		Stderr:   stderr,
+		ExitCode: exitCode,
+		Duration: time.Since(start),
+	}, nil
+}
+
+func normalizeLimits(l execution.RunLimits) execution.RunLimits {
+	if l.TimeLimit < 0 {
+		l.TimeLimit = 0
+	}
+	if l.MemoryLimitBytes < 0 {
+		l.MemoryLimitBytes = 0
+	}
+	return l
 }
 
 func (r *Runner) copyScript(ctx context.Context, containerID, source string) error {

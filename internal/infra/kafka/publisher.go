@@ -80,13 +80,14 @@ func (p *Publisher) Close() error {
 }
 
 type resultEnvelope struct {
-	ID         string    `json:"id"`
-	ExitCode   *int64    `json:"exit_code,omitempty"`
-	Stdout     string    `json:"stdout,omitempty"`
-	Stderr     string    `json:"stderr,omitempty"`
-	DurationMs *int64    `json:"duration_ms,omitempty"`
-	Error      string    `json:"error,omitempty"`
-	Timestamp  time.Time `json:"timestamp"`
+	ID         string           `json:"id"`
+	Status     execution.Status `json:"status,omitempty"`
+	ExitCode   *int64           `json:"exit_code,omitempty"`
+	Stdout     string           `json:"stdout,omitempty"`
+	Stderr     string           `json:"stderr,omitempty"`
+	DurationMs *int64           `json:"duration_ms,omitempty"`
+	Error      string           `json:"error,omitempty"`
+	Timestamp  time.Time        `json:"timestamp"`
 }
 
 func makeResultEnvelope(report execution.RunReport) resultEnvelope {
@@ -94,6 +95,7 @@ func makeResultEnvelope(report execution.RunReport) resultEnvelope {
 	var durationMs *int64
 	var stdout string
 	var stderr string
+	var status execution.Status
 
 	if report.Result != nil {
 		exit := report.Result.ExitCode
@@ -104,6 +106,7 @@ func makeResultEnvelope(report execution.RunReport) resultEnvelope {
 
 		stdout = report.Result.Stdout
 		stderr = report.Result.Stderr
+		status = report.Result.Status
 	}
 
 	errMsg := ""
@@ -113,6 +116,7 @@ func makeResultEnvelope(report execution.RunReport) resultEnvelope {
 
 	return resultEnvelope{
 		ID:         report.Script.ID,
+		Status:     status,
 		ExitCode:   exitCode,
 		Stdout:     stdout,
 		Stderr:     stderr,
