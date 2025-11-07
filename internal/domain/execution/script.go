@@ -5,6 +5,7 @@ type Script struct {
 	ID     string
 	Source string
 	Limits RunLimits
+	Tests  []TestCase
 }
 
 // RunReport captures the outcome of executing a Script.

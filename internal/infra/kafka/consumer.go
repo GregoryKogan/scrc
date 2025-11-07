@@ -110,7 +110,21 @@ func (c *Consumer) NextScript(ctx context.Context) (execution.Script, error) {
 			}
 		}
 
-		return execution.Script{ID: scriptID, Source: envelope.Source, Limits: limits}, nil
+		tests := make([]execution.TestCase, len(envelope.Tests))
+		for idx, test := range envelope.Tests {
+			number := test.Number
+			if number <= 0 {
+				number = idx + 1
+			}
+
+			tests[idx] = execution.TestCase{
+				Number:         number,
+				Input:          test.Input,
+				ExpectedOutput: test.ExpectedOutput,
+			}
+		}
+
+		return execution.Script{ID: scriptID, Source: envelope.Source, Limits: limits, Tests: tests}, nil
 	case messageTypeDone:
 		return execution.Script{}, io.EOF
 	default:
@@ -124,13 +138,20 @@ func (c *Consumer) Close() error {
 }
 
 type scriptEnvelope struct {
-	Type   string        `json:"type"`
-	ID     string        `json:"id"`
-	Source string        `json:"source"`
-	Limits *scriptLimits `json:"limits,omitempty"`
+	Type   string           `json:"type"`
+	ID     string           `json:"id"`
+	Source string           `json:"source"`
+	Limits *scriptLimits    `json:"limits,omitempty"`
+	Tests  []scriptTestCase `json:"tests,omitempty"`
 }
 
 type scriptLimits struct {
 	TimeLimitMs      int64 `json:"time_limit_ms"`
 	MemoryLimitBytes int64 `json:"memory_limit_bytes"`
+}
+
+type scriptTestCase struct {
+	Number         int    `json:"number"`
+	Input          string `json:"input"`
+	ExpectedOutput string `json:"expected_output"`
 }

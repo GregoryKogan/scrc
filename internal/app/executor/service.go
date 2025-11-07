@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"scrc/internal/domain/execution"
 	"scrc/internal/ports"
@@ -27,7 +28,7 @@ func (s *Service) ExecutePython(ctx context.Context, source string) (*execution.
 
 // ExecutePythonWithLimits runs the supplied Python source with the provided resource limits.
 func (s *Service) ExecutePythonWithLimits(ctx context.Context, source string, limits execution.RunLimits) (*execution.Result, error) {
-	return s.runtime.RunPython(ctx, source, limits)
+	return s.runtime.RunPython(ctx, source, limits, "")
 }
 
 // ExecuteFromProducer pulls scripts from the supplied producer and runs them sequentially.
@@ -60,18 +61,86 @@ func (s *Service) ExecuteFromProducer(
 			return fmt.Errorf("get next script: %w", err)
 		}
 
-		result, runErr := s.runtime.RunPython(ctx, script.Source, script.Limits)
-		report := execution.RunReport{
-			Script: script,
-			Result: result,
-			Err:    runErr,
-		}
+		report := s.executeScriptSuite(ctx, script)
 
 		if onReport != nil {
 			onReport(report)
 		}
 
 		processed++
+	}
+}
+
+func (s *Service) executeScriptSuite(ctx context.Context, script execution.Script) execution.RunReport {
+	if len(script.Tests) == 0 {
+		result, runErr := s.runtime.RunPython(ctx, script.Source, script.Limits, "")
+		return execution.RunReport{
+			Script: script,
+			Result: result,
+			Err:    runErr,
+		}
+	}
+
+	tests := make([]execution.TestResult, len(script.Tests))
+	overallStatus := execution.StatusOK
+	var suiteResult execution.Result
+	var runErr error
+	var totalDuration time.Duration
+
+	for idx, test := range script.Tests {
+		testResult := execution.TestResult{
+			Case: test,
+		}
+
+		if overallStatus != execution.StatusOK {
+			testResult.Status = execution.StatusNotRun
+			tests[idx] = testResult
+			continue
+		}
+
+		run, err := s.runtime.RunPython(ctx, script.Source, script.Limits, test.Input)
+		if err != nil && runErr == nil {
+			runErr = err
+			testResult.Error = err.Error()
+		}
+
+		if run != nil {
+			testResult.Stdout = run.Stdout
+			testResult.Stderr = run.Stderr
+			testResult.ExitCode = run.ExitCode
+			testResult.Duration = run.Duration
+			totalDuration += run.Duration
+			if run.Status != "" {
+				testResult.Status = run.Status
+			}
+
+			suiteResult.Stdout = run.Stdout
+			suiteResult.Stderr = run.Stderr
+			suiteResult.ExitCode = run.ExitCode
+			suiteResult.Duration = run.Duration
+		}
+
+		if testResult.Status == "" {
+			testResult.Status = execution.StatusOK
+		}
+
+		if testResult.Status == execution.StatusOK && testResult.Stdout != test.ExpectedOutput {
+			testResult.Status = execution.StatusWrongAnswer
+		}
+
+		tests[idx] = testResult
+		if testResult.Status != execution.StatusOK {
+			overallStatus = testResult.Status
+		}
+	}
+	suiteResult.Status = overallStatus
+	suiteResult.Tests = tests
+	suiteResult.Duration = totalDuration
+
+	return execution.RunReport{
+		Script: script,
+		Result: &suiteResult,
+		Err:    runErr,
 	}
 }
 

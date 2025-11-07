@@ -8,10 +8,14 @@ type Status string
 const (
 	// StatusOK indicates that the script finished within the configured limits.
 	StatusOK Status = "OK"
+	// StatusWrongAnswer indicates that the script finished but produced an unexpected output.
+	StatusWrongAnswer Status = "WA"
 	// StatusTimeLimit indicates that the script was terminated for exceeding the time limit.
 	StatusTimeLimit Status = "TL"
 	// StatusMemoryLimit indicates that the script was terminated for exceeding the memory limit.
 	StatusMemoryLimit Status = "ML"
+	// StatusNotRun indicates that the test was not executed.
+	StatusNotRun Status = "-"
 )
 
 // Result captures the outcome of executing a script.
@@ -21,4 +25,5 @@ type Result struct {
 	Stderr   string
 	ExitCode int64
 	Duration time.Duration
+	Tests    []TestResult
 }

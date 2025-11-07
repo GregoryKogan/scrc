@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -68,7 +69,7 @@ func (r *Runner) Close() error {
 }
 
 // RunPython executes the provided Python source inside a new container instance.
-func (r *Runner) RunPython(ctx context.Context, source string, limits execution.RunLimits) (*execution.Result, error) {
+func (r *Runner) RunPython(ctx context.Context, source string, limits execution.RunLimits, stdin string) (*execution.Result, error) {
 	if err := r.ensureImage(ctx); err != nil {
 		return nil, err
 	}
@@ -85,9 +86,32 @@ func (r *Runner) RunPython(ctx context.Context, source string, limits execution.
 		return nil, fmt.Errorf("copy script: %w", err)
 	}
 
+	attachCtx := ctx
+	if attachCtx.Err() != nil {
+		attachCtx = context.Background()
+	}
+	attach, err := r.cli.ContainerAttach(attachCtx, containerID, container.AttachOptions{
+		Stream: true,
+		Stdin:  true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("attach container: %w", err)
+	}
+	defer attach.Close()
+
 	start := time.Now()
 	if err := r.cli.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
 		return nil, fmt.Errorf("start container: %w", err)
+	}
+
+	if attach.Conn != nil {
+		reader := strings.NewReader(stdin)
+		if _, err := io.Copy(attach.Conn, reader); err != nil {
+			return nil, fmt.Errorf("write stdin: %w", err)
+		}
+		if closer, ok := attach.Conn.(interface{ CloseWrite() error }); ok {
+			_ = closer.CloseWrite()
+		}
 	}
 
 	waitCtx := ctx
@@ -175,6 +199,9 @@ func (r *Runner) createContainer(ctx context.Context, limits execution.RunLimits
 			Cmd:          []string{"python", r.workdir + "/" + scriptFilename},
 			AttachStdout: true,
 			AttachStderr: true,
+			AttachStdin:  true,
+			OpenStdin:    true,
+			StdinOnce:    true,
 			WorkingDir:   r.workdir,
 		},
 		hostConfig,

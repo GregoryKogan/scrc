@@ -8,6 +8,6 @@ import (
 
 // PythonRunner describes capabilities for executing Python code.
 type PythonRunner interface {
-	RunPython(ctx context.Context, source string, limits execution.RunLimits) (*execution.Result, error)
+	RunPython(ctx context.Context, source string, limits execution.RunLimits, stdin string) (*execution.Result, error)
 	Close() error
 }
