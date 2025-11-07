@@ -8,7 +8,8 @@
 *.out
 
 # Local binaries
-scrc
+/scrc
+!/cmd/scrc/
 bin/
 
 # Temporary files
