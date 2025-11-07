@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"fmt"
 
 	"scrc/internal/domain/execution"
 	"scrc/internal/ports"
@@ -20,6 +21,26 @@ func NewService(runtime ports.PythonRunner) *Service {
 // ExecutePython runs the supplied Python source and returns execution details.
 func (s *Service) ExecutePython(ctx context.Context, source string) (*execution.Result, error) {
 	return s.runtime.RunPython(ctx, source)
+}
+
+// ExecuteFromProducer pulls scripts from the supplied producer and runs them sequentially.
+func (s *Service) ExecuteFromProducer(ctx context.Context, producer ports.ScriptProducer) ([]execution.RunReport, error) {
+	scripts, err := producer.ProduceScripts(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get scripts: %w", err)
+	}
+
+	reports := make([]execution.RunReport, 0, len(scripts))
+	for _, script := range scripts {
+		result, runErr := s.runtime.RunPython(ctx, script.Source)
+		reports = append(reports, execution.RunReport{
+			Script: script,
+			Result: result,
+			Err:    runErr,
+		})
+	}
+
+	return reports, nil
 }
 
 // Close releases any resources owned by the underlying runtime.

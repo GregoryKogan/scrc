@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"scrc/internal/app/executor"
+	"scrc/internal/app/producer"
 	"scrc/internal/infra/docker"
 )
 
@@ -34,18 +35,26 @@ func main() {
 		}
 	}()
 
-	script := "print('Hello from Python inside Docker!')\n"
+	scriptProducer := producer.NewService()
 
-	result, err := service.ExecutePython(ctx, script)
+	reports, err := service.ExecuteFromProducer(ctx, scriptProducer)
 	if err != nil {
-		log.Fatalf("execution failed: %v", err)
+		log.Fatalf("failed to execute scripts: %v", err)
 	}
 
-	fmt.Printf("container exited with status %d after %s\n", result.ExitCode, result.Duration.Round(time.Millisecond))
-	if result.Stdout != "" {
-		fmt.Print(result.Stdout)
-	}
-	if result.Stderr != "" {
-		fmt.Fprint(log.Writer(), result.Stderr)
+	for _, report := range reports {
+		if report.Err != nil {
+			log.Printf("script %q failed: %v", report.Script.ID, report.Err)
+			continue
+		}
+
+		result := report.Result
+		fmt.Printf("script %q exited with status %d after %s\n", report.Script.ID, result.ExitCode, result.Duration.Round(time.Millisecond))
+		if result.Stdout != "" {
+			fmt.Print(result.Stdout)
+		}
+		if result.Stderr != "" {
+			fmt.Fprint(log.Writer(), result.Stderr)
+		}
 	}
 }
