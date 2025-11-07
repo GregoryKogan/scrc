@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"scrc/internal/domain/execution"
@@ -31,7 +32,7 @@ func (s *Service) ExecutePythonWithLimits(ctx context.Context, source string, li
 	return s.runtime.RunPython(ctx, source, limits, "")
 }
 
-// ExecuteFromProducer pulls scripts from the supplied producer and runs them sequentially.
+// ExecuteFromProducer pulls scripts from the supplied producer and runs them with bounded parallelism.
 //
 // If maxScripts is greater than zero the execution stops after the specified
 // number of scripts has been processed. Otherwise it keeps consuming until the
@@ -43,31 +44,48 @@ func (s *Service) ExecuteFromProducer(
 	ctx context.Context,
 	producer ports.ScriptProducer,
 	maxScripts int,
+	maxParallel int,
 	onReport func(execution.RunReport),
 ) error {
+	if maxParallel <= 0 {
+		maxParallel = 1
+	}
+
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, maxParallel)
 	processed := 0
+
+	finish := func(err error) error {
+		wg.Wait()
+		return err
+	}
 
 	for {
 		if maxScripts > 0 && processed >= maxScripts {
-			return nil
+			return finish(nil)
 		}
 
 		script, err := producer.NextScript(ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, io.EOF) {
-				return nil
+				return finish(nil)
 			}
 
-			return fmt.Errorf("get next script: %w", err)
+			return finish(fmt.Errorf("get next script: %w", err))
 		}
 
-		report := s.executeScriptSuite(ctx, script)
-
-		if onReport != nil {
-			onReport(report)
-		}
-
+		sem <- struct{}{}
+		wg.Add(1)
 		processed++
+		go func(script execution.Script) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			report := s.executeScriptSuite(ctx, script)
+			if onReport != nil {
+				onReport(report)
+			}
+		}(script)
 	}
 }
 

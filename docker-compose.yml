@@ -50,6 +50,7 @@ services:
       - KAFKA_TOPIC=scripts
       - KAFKA_GROUP_ID=scrc-runner
       - KAFKA_RESULTS_TOPIC=script-results
+      - RUNNER_MAX_PARALLEL=8
 
   scrc-producer:
     build: ./producer

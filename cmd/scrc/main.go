@@ -74,6 +74,7 @@ func main() {
 		ctx,
 		consumer,
 		parseMaxScripts(os.Getenv("SCRIPT_EXPECTED")),
+		parseMaxParallel(os.Getenv("RUNNER_MAX_PARALLEL")),
 		func(report execution.RunReport) {
 			if err := publisher.PublishRunReport(ctx, report); err != nil {
 				log.Printf("failed to publish run report for script %q: %v", report.Script.ID, err)
@@ -116,4 +117,20 @@ func parseMaxScripts(raw string) int {
 		return 0
 	}
 	return maxScripts
+}
+
+func parseMaxParallel(raw string) int {
+	if raw == "" {
+		return 1
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		log.Printf("warning: ignoring invalid RUNNER_MAX_PARALLEL value %q: %v", raw, err)
+		return 1
+	}
+	if value <= 0 {
+		log.Printf("warning: RUNNER_MAX_PARALLEL must be positive, defaulting to 1 (got %d)", value)
+		return 1
+	}
+	return value
 }
