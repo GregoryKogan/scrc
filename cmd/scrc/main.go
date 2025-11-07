@@ -2,14 +2,12 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"scrc/internal/app/executor"
 	"scrc/internal/domain/execution"
@@ -18,11 +16,12 @@ import (
 )
 
 const (
-	dockerImage         = "python:3.12-alpine"
-	containerWorkdir    = "/tmp"
-	defaultKafkaBrokers = "kafka:9092"
-	defaultKafkaTopic   = "scripts"
-	defaultKafkaGroupID = "scrc-runner"
+	dockerImage              = "python:3.12-alpine"
+	containerWorkdir         = "/tmp"
+	defaultKafkaBrokers      = "kafka:9092"
+	defaultKafkaTopic        = "scripts"
+	defaultKafkaGroupID      = "scrc-runner"
+	defaultKafkaResultsTopic = "script-results"
 )
 
 func main() {
@@ -58,23 +57,26 @@ func main() {
 		}
 	}()
 
+	publisher, err := kafkainfra.NewPublisher(kafkainfra.PublisherConfig{
+		Brokers: parseBrokerList(envOrDefault("KAFKA_BROKERS", defaultKafkaBrokers)),
+		Topic:   envOrDefault("KAFKA_RESULTS_TOPIC", defaultKafkaResultsTopic),
+	})
+	if err != nil {
+		log.Fatalf("failed to initialize kafka publisher: %v", err)
+	}
+	defer func() {
+		if cerr := publisher.Close(); cerr != nil {
+			log.Printf("warning: failed to close kafka publisher: %v", cerr)
+		}
+	}()
+
 	if err := service.ExecuteFromProducer(
 		ctx,
 		consumer,
 		parseMaxScripts(os.Getenv("SCRIPT_EXPECTED")),
 		func(report execution.RunReport) {
-			if report.Err != nil {
-				log.Printf("script %q failed: %v", report.Script.ID, report.Err)
-				return
-			}
-
-			result := report.Result
-			fmt.Printf("script %q exited with status %d after %s\n", report.Script.ID, result.ExitCode, result.Duration.Round(time.Millisecond))
-			if result.Stdout != "" {
-				fmt.Print(result.Stdout)
-			}
-			if result.Stderr != "" {
-				fmt.Fprint(log.Writer(), result.Stderr)
+			if err := publisher.PublishRunReport(ctx, report); err != nil {
+				log.Printf("failed to publish run report for script %q: %v", report.Script.ID, err)
 			}
 		},
 	); err != nil {
