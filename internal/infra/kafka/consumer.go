@@ -2,20 +2,13 @@ package kafka
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"time"
 
 	kafkago "github.com/segmentio/kafka-go"
 
 	"scrc/internal/domain/execution"
 	"scrc/internal/ports"
-)
-
-const (
-	messageTypeScript = "script"
-	messageTypeDone   = "done"
 )
 
 // Config describes how to connect to a Kafka cluster for consuming scripts.
@@ -85,92 +78,10 @@ func (c *Consumer) NextScript(ctx context.Context) (execution.Script, error) {
 		return execution.Script{}, err
 	}
 
-	var envelope scriptEnvelope
-	if err := json.Unmarshal(msg.Value, &envelope); err != nil {
-		return execution.Script{}, fmt.Errorf("decode message: %w", err)
-	}
-
-	msgType := envelope.Type
-	if msgType == "" {
-		msgType = messageTypeScript
-	}
-
-	switch msgType {
-	case messageTypeScript:
-		if envelope.Source == "" {
-			return execution.Script{}, fmt.Errorf("script message missing source")
-		}
-		if envelope.Language == "" {
-			return execution.Script{}, fmt.Errorf("script message missing language")
-		}
-
-		scriptID := envelope.ID
-		if scriptID == "" {
-			scriptID = string(msg.Key)
-		}
-		if scriptID == "" {
-			scriptID = fmt.Sprintf("%s:%d", msg.Topic, msg.Offset)
-		}
-
-		limits := execution.RunLimits{}
-		if envelope.Limits != nil {
-			if envelope.Limits.TimeLimitMs > 0 {
-				limits.TimeLimit = time.Duration(envelope.Limits.TimeLimitMs) * time.Millisecond
-			}
-			if envelope.Limits.MemoryLimitBytes > 0 {
-				limits.MemoryLimitBytes = envelope.Limits.MemoryLimitBytes
-			}
-		}
-
-		tests := make([]execution.TestCase, len(envelope.Tests))
-		for idx, test := range envelope.Tests {
-			number := test.Number
-			if number <= 0 {
-				number = idx + 1
-			}
-
-			tests[idx] = execution.TestCase{
-				Number:         number,
-				Input:          test.Input,
-				ExpectedOutput: test.ExpectedOutput,
-			}
-		}
-
-		return execution.Script{
-			ID:       scriptID,
-			Language: execution.Language(envelope.Language),
-			Source:   envelope.Source,
-			Limits:   limits,
-			Tests:    tests,
-		}, nil
-	case messageTypeDone:
-		return execution.Script{}, io.EOF
-	default:
-		return execution.Script{}, fmt.Errorf("unknown message type %q", msgType)
-	}
+	return decodeScriptMessage(msg)
 }
 
 // Close releases the underlying Kafka reader.
 func (c *Consumer) Close() error {
 	return c.reader.Close()
-}
-
-type scriptEnvelope struct {
-	Type     string           `json:"type"`
-	ID       string           `json:"id"`
-	Language string           `json:"language"`
-	Source   string           `json:"source"`
-	Limits   *scriptLimits    `json:"limits,omitempty"`
-	Tests    []scriptTestCase `json:"tests,omitempty"`
-}
-
-type scriptLimits struct {
-	TimeLimitMs      int64 `json:"time_limit_ms"`
-	MemoryLimitBytes int64 `json:"memory_limit_bytes"`
-}
-
-type scriptTestCase struct {
-	Number         int    `json:"number"`
-	Input          string `json:"input"`
-	ExpectedOutput string `json:"expected_output"`
 }
