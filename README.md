@@ -7,7 +7,7 @@ program submissions from Kafka, enforces resource limits, executes the compiled
 programs inside Docker containers, and reports the results back to Kafka. The
 service is intended to power online judge / code-evaluation workloads where new
 languages can be added over time, and where the execution environment must be
-containerised and isolated.
+containerized and isolated.
 
 ### High-Level Workflow
 
@@ -19,12 +19,12 @@ containerised and isolated.
    invocation.
 3. **Docker runtime** executes the program inside an ephemeral container,
    respecting time and memory limits for each test case.
-4. **Result publisher** serialises the outcome (status, stdout/stderr, test case
+4. **Result publisher** serializes the outcome (status, stdout/stderr, test case
    details, error messages) and emits it back to Kafka.
 
 ### Codebase Structure
 
-```
+```plaintext
 cmd/
   scrc/             # Application entry point and configuration wiring
 internal/
