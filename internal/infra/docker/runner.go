@@ -167,9 +167,11 @@ func (p *pythonPreparedScript) Close() error {
 type goStrategy struct{}
 
 func (g *goStrategy) Prepare(ctx context.Context, runner *Runner, runtime *languageRuntime, script execution.Script) (ports.PreparedScript, *execution.Result, error) {
-	effectiveLimits := runner.effectiveLimits(script.Limits)
+	runLimits := runner.effectiveLimits(script.Limits)
+	buildLimits := runLimits
+	buildLimits.TimeLimit = 0
 
-	containerID, cleanup, err := runner.createContainer(ctx, runtime, effectiveLimits, []string{"go", "build", "-o", goBinaryFilename, goSourceFilename}, false)
+	containerID, cleanup, err := runner.createContainer(ctx, runtime, buildLimits, []string{"go", "build", "-o", goBinaryFilename, goSourceFilename}, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -192,15 +194,15 @@ func (g *goStrategy) Prepare(ctx context.Context, runner *Runner, runtime *langu
 
 	waitCtx := ctx
 	var cancel context.CancelFunc
-	if effectiveLimits.TimeLimit > 0 {
-		waitCtx, cancel = context.WithTimeout(ctx, effectiveLimits.TimeLimit)
+	if buildLimits.TimeLimit > 0 {
+		waitCtx, cancel = context.WithTimeout(ctx, buildLimits.TimeLimit)
 	}
 	status, err := runner.waitForExit(waitCtx, containerID)
 	if cancel != nil {
 		cancel()
 	}
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) && effectiveLimits.TimeLimit > 0 && ctx.Err() == nil {
+		if errors.Is(err, context.DeadlineExceeded) && buildLimits.TimeLimit > 0 && ctx.Err() == nil {
 			result, handleErr := runner.handleTimeLimit(containerID, start)
 			if handleErr != nil {
 				return nil, nil, handleErr
@@ -256,7 +258,7 @@ func (g *goStrategy) Prepare(ctx context.Context, runner *Runner, runtime *langu
 		runner:  runner,
 		runtime: runtime,
 		binary:  binaryData,
-		limits:  script.Limits,
+		limits:  runLimits,
 	}, nil, nil
 }
 
