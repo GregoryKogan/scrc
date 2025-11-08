@@ -14,7 +14,7 @@ containerized and isolated.
 1. **Kafka consumer** reads script submissions that contain the source code,
    requested language, optional resource limits, and test cases.
 2. **Runtime registry** selects the appropriate language module and prepares the
-   submission. For compiled languages (e.g. Go) this includes a build step; for
+   submission. For compiled languages (e.g. Go, C) this includes a build step; for
    interpreted languages (e.g. Python) it produces a ready-to-run container
    invocation.
 3. **Docker runtime** executes the program inside an ephemeral container,
@@ -90,20 +90,29 @@ environment variable on the runner service.
 The producer emits a new script roughly once per second by default; change the
 cadence by setting `SCRIPT_INTERVAL_SECONDS` on the producer container.
 
+### Language Runtimes
+
+Each language runtime can be customized by overriding the container image or working
+directory via environment variables:
+
+- `PYTHON_IMAGE` / `PYTHON_WORKDIR` (default image `python:3.12-alpine`)
+- `GO_IMAGE` / `GO_WORKDIR` (default image `golang:1.22-alpine`)
+- `C_IMAGE` / `C_WORKDIR` (default image `gcc:14`)
+
 ## Script Payload
 
 Messages published to the scripts topic must include:
 
 - `id`: unique identifier for the submission
-- `language`: execution language (e.g. `python`, `go`)
+- `language`: execution language (e.g. `python`, `go`, `c`)
 - `source`: program source code
 - `limits` (optional): time and memory limits
 - `tests` (optional): input/output expectations
 
-The runner performs a build step first (no-op for Python, compile for Go) and
+The runner performs a build step first (no-op for Python, compile for Go and C) and
 then measures the program's execution separately. Build failures are reported
-with the `BF` status code. The sample producer currently emits Python programs,
-but the runner can execute Go submissions as well.
+with the `BF` status code. The sample producer currently emits Python, Go, and C
+programs.
 
 ## Testing
 
