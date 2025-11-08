@@ -98,6 +98,22 @@ def build_scenarios() -> list[dict]:
         ]
     )
 
+    c_sum_script = "\n".join(
+        [
+            "#include <stdio.h>",
+            "",
+            "int main(void) {",
+            "    long long value;",
+            "    long long total = 0;",
+            '    while (scanf("%lld", &value) == 1) {',
+            "        total += value;",
+            "    }",
+            '    printf("%lld\\n", total);',
+            "    return 0;",
+            "}",
+        ]
+    )
+
     return [
         {
             "base_id": "script-ok",
@@ -156,6 +172,27 @@ def build_scenarios() -> list[dict]:
             "base_id": "script-go-ok",
             "language": "go",
             "source": go_sum_script,
+            "limits": {
+                "time_limit_ms": 2_000,
+                "memory_limit_bytes": 256 * 1024 * 1024,
+            },
+            "tests": [
+                {
+                    "number": 1,
+                    "input": "1 2 3\n",
+                    "expected_output": "6\n",
+                },
+                {
+                    "number": 2,
+                    "input": "10 -5 7\n",
+                    "expected_output": "12\n",
+                },
+            ],
+        },
+        {
+            "base_id": "script-c-ok",
+            "language": "c",
+            "source": c_sum_script,
             "limits": {
                 "time_limit_ms": 2_000,
                 "memory_limit_bytes": 256 * 1024 * 1024,
