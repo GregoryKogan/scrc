@@ -16,7 +16,8 @@ import (
 )
 
 const (
-	dockerImage              = "python:3.12-alpine"
+	pythonDockerImage        = "python:3.12-alpine"
+	goDockerImage            = "golang:1.22-alpine"
 	containerWorkdir         = "/tmp"
 	defaultKafkaBrokers      = "kafka:9092"
 	defaultKafkaTopic        = "scripts"
@@ -29,8 +30,16 @@ func main() {
 	defer stop()
 
 	runtime, err := docker.New(docker.Config{
-		Image:   dockerImage,
-		Workdir: containerWorkdir,
+		Languages: map[execution.Language]docker.LanguageConfig{
+			execution.LanguagePython: {
+				Image:   pythonDockerImage,
+				Workdir: containerWorkdir,
+			},
+			execution.LanguageGo: {
+				Image:   goDockerImage,
+				Workdir: containerWorkdir,
+			},
+		},
 	})
 	if err != nil {
 		log.Fatalf("failed to initialize docker runner: %v", err)

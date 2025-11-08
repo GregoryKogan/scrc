@@ -91,6 +91,9 @@ func (c *Consumer) NextScript(ctx context.Context) (execution.Script, error) {
 		if envelope.Source == "" {
 			return execution.Script{}, fmt.Errorf("script message missing source")
 		}
+		if envelope.Language == "" {
+			return execution.Script{}, fmt.Errorf("script message missing language")
+		}
 
 		scriptID := envelope.ID
 		if scriptID == "" {
@@ -124,7 +127,13 @@ func (c *Consumer) NextScript(ctx context.Context) (execution.Script, error) {
 			}
 		}
 
-		return execution.Script{ID: scriptID, Source: envelope.Source, Limits: limits, Tests: tests}, nil
+		return execution.Script{
+			ID:       scriptID,
+			Language: execution.Language(envelope.Language),
+			Source:   envelope.Source,
+			Limits:   limits,
+			Tests:    tests,
+		}, nil
 	case messageTypeDone:
 		return execution.Script{}, io.EOF
 	default:
@@ -138,11 +147,12 @@ func (c *Consumer) Close() error {
 }
 
 type scriptEnvelope struct {
-	Type   string           `json:"type"`
-	ID     string           `json:"id"`
-	Source string           `json:"source"`
-	Limits *scriptLimits    `json:"limits,omitempty"`
-	Tests  []scriptTestCase `json:"tests,omitempty"`
+	Type     string           `json:"type"`
+	ID       string           `json:"id"`
+	Language string           `json:"language"`
+	Source   string           `json:"source"`
+	Limits   *scriptLimits    `json:"limits,omitempty"`
+	Tests    []scriptTestCase `json:"tests,omitempty"`
 }
 
 type scriptLimits struct {

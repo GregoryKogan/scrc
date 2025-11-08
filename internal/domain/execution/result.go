@@ -14,6 +14,8 @@ const (
 	StatusTimeLimit Status = "TL"
 	// StatusMemoryLimit indicates that the script was terminated for exceeding the memory limit.
 	StatusMemoryLimit Status = "ML"
+	// StatusBuildFail indicates that the script failed to build.
+	StatusBuildFail Status = "BF"
 	// StatusNotRun indicates that the test was not executed.
 	StatusNotRun Status = "-"
 )

@@ -72,9 +72,36 @@ def build_scenarios() -> list[dict]:
         ]
     )
 
+    go_sum_script = "\n".join(
+        [
+            "package main",
+            "",
+            "import (",
+            '    "bufio"',
+            '    "fmt"',
+            '    "os"',
+            ")",
+            "",
+            "func main() {",
+            "    reader := bufio.NewReader(os.Stdin)",
+            "    var total int64",
+            "    for {",
+            "        var value int64",
+            "        _, err := fmt.Fscan(reader, &value)",
+            "        if err != nil {",
+            "            break",
+            "        }",
+            "        total += value",
+            "    }",
+            "    fmt.Println(total)",
+            "}",
+        ]
+    )
+
     return [
         {
             "base_id": "script-ok",
+            "language": "python",
             "source": sum_script,
             "limits": {
                 "time_limit_ms": 2_000,
@@ -95,6 +122,7 @@ def build_scenarios() -> list[dict]:
         },
         {
             "base_id": "script-tl",
+            "language": "python",
             "source": time_limit_script,
             "limits": {
                 "time_limit_ms": 1_000,
@@ -110,6 +138,7 @@ def build_scenarios() -> list[dict]:
         },
         {
             "base_id": "script-ml",
+            "language": "python",
             "source": memory_limit_script,
             "limits": {
                 "time_limit_ms": 5_000,
@@ -123,6 +152,27 @@ def build_scenarios() -> list[dict]:
                 }
             ],
         },
+        {
+            "base_id": "script-go-ok",
+            "language": "go",
+            "source": go_sum_script,
+            "limits": {
+                "time_limit_ms": 2_000,
+                "memory_limit_bytes": 256 * 1024 * 1024,
+            },
+            "tests": [
+                {
+                    "number": 1,
+                    "input": "1 2 3\n",
+                    "expected_output": "6\n",
+                },
+                {
+                    "number": 2,
+                    "input": "10 -5 7\n",
+                    "expected_output": "12\n",
+                },
+            ],
+        },
     ]
 
 
@@ -134,6 +184,7 @@ def stream_scripts(interval_s: float = 1.0):
             yield {
                 "type": "script",
                 "id": f"{scenario['base_id']}-{iteration}",
+                "language": scenario["language"],
                 "source": scenario["source"],
                 "limits": scenario["limits"],
                 "tests": scenario["tests"],

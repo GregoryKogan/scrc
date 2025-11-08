@@ -14,22 +14,12 @@ import (
 
 // Service coordinates script execution through a runtime implementation.
 type Service struct {
-	runtime ports.PythonRunner
+	runtime ports.Runner
 }
 
 // NewService constructs a Service with the provided runtime dependency.
-func NewService(runtime ports.PythonRunner) *Service {
+func NewService(runtime ports.Runner) *Service {
 	return &Service{runtime: runtime}
-}
-
-// ExecutePython runs the supplied Python source and returns execution details.
-func (s *Service) ExecutePython(ctx context.Context, source string) (*execution.Result, error) {
-	return s.ExecutePythonWithLimits(ctx, source, execution.RunLimits{})
-}
-
-// ExecutePythonWithLimits runs the supplied Python source with the provided resource limits.
-func (s *Service) ExecutePythonWithLimits(ctx context.Context, source string, limits execution.RunLimits) (*execution.Result, error) {
-	return s.runtime.RunPython(ctx, source, limits, "")
 }
 
 // ExecuteFromProducer pulls scripts from the supplied producer and runs them with bounded parallelism.
@@ -90,11 +80,36 @@ func (s *Service) ExecuteFromProducer(
 }
 
 func (s *Service) executeScriptSuite(ctx context.Context, script execution.Script) execution.RunReport {
-	if len(script.Tests) == 0 {
-		result, runErr := s.runtime.RunPython(ctx, script.Source, script.Limits, "")
+	prepared, buildResult, err := s.runtime.Prepare(ctx, script)
+	if err != nil {
 		return execution.RunReport{
 			Script: script,
-			Result: result,
+			Err:    err,
+		}
+	}
+	if prepared != nil {
+		defer prepared.Close()
+	}
+
+	if buildResult != nil {
+		return execution.RunReport{
+			Script: script,
+			Result: buildResult,
+		}
+	}
+
+	if prepared == nil {
+		return execution.RunReport{
+			Script: script,
+			Err:    fmt.Errorf("runner returned nil prepared script without build result"),
+		}
+	}
+
+	if len(script.Tests) == 0 {
+		run, runErr := prepared.Run(ctx, "")
+		return execution.RunReport{
+			Script: script,
+			Result: run,
 			Err:    runErr,
 		}
 	}
@@ -116,7 +131,7 @@ func (s *Service) executeScriptSuite(ctx context.Context, script execution.Scrip
 			continue
 		}
 
-		run, err := s.runtime.RunPython(ctx, script.Source, script.Limits, test.Input)
+		run, err := prepared.Run(ctx, test.Input)
 		if err != nil && runErr == nil {
 			runErr = err
 			testResult.Error = err.Error()
@@ -128,6 +143,7 @@ func (s *Service) executeScriptSuite(ctx context.Context, script execution.Scrip
 			testResult.ExitCode = run.ExitCode
 			testResult.Duration = run.Duration
 			totalDuration += run.Duration
+
 			if run.Status != "" {
 				testResult.Status = run.Status
 			}
@@ -135,7 +151,6 @@ func (s *Service) executeScriptSuite(ctx context.Context, script execution.Scrip
 			suiteResult.Stdout = run.Stdout
 			suiteResult.Stderr = run.Stderr
 			suiteResult.ExitCode = run.ExitCode
-			suiteResult.Duration = run.Duration
 		}
 
 		if testResult.Status == "" {
@@ -151,6 +166,7 @@ func (s *Service) executeScriptSuite(ctx context.Context, script execution.Scrip
 			overallStatus = testResult.Status
 		}
 	}
+
 	suiteResult.Status = overallStatus
 	suiteResult.Tests = tests
 	suiteResult.Duration = totalDuration
