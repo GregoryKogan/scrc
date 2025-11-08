@@ -23,7 +23,12 @@ type PublisherConfig struct {
 
 // Publisher publishes run reports to Kafka.
 type Publisher struct {
-	writer *kafkago.Writer
+	writer messageWriter
+}
+
+type messageWriter interface {
+	WriteMessages(ctx context.Context, msgs ...kafkago.Message) error
+	Close() error
 }
 
 // NewPublisher constructs a Publisher using the supplied configuration.
@@ -44,7 +49,11 @@ func NewPublisher(cfg PublisherConfig) (*Publisher, error) {
 		BatchTimeout:           10 * time.Millisecond,
 	}
 
-	return &Publisher{writer: writer}, nil
+	return newPublisher(writer), nil
+}
+
+func newPublisher(writer messageWriter) *Publisher {
+	return &Publisher{writer: writer}
 }
 
 // PublishRunReport serializes and writes the supplied report to Kafka.

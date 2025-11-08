@@ -32,7 +32,12 @@ var _ ports.ScriptProducer = (*Consumer)(nil)
 
 // Consumer wraps a kafka-go reader to implement ports.ScriptProducer.
 type Consumer struct {
-	reader *kafkago.Reader
+	reader messageReader
+}
+
+type messageReader interface {
+	ReadMessage(ctx context.Context) (kafkago.Message, error)
+	Close() error
 }
 
 // NewConsumer builds a new Consumer from the provided configuration.
@@ -66,7 +71,11 @@ func NewConsumer(cfg Config) (*Consumer, error) {
 		readerConfig.MaxWait = time.Second
 	}
 
-	return &Consumer{reader: kafkago.NewReader(readerConfig)}, nil
+	return newConsumer(kafkago.NewReader(readerConfig)), nil
+}
+
+func newConsumer(reader messageReader) *Consumer {
+	return &Consumer{reader: reader}
 }
 
 // NextScript blocks until the next script message is available in Kafka or the context is cancelled.

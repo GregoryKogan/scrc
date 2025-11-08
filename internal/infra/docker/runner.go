@@ -15,8 +15,10 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
+	specs "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"scrc/internal/domain/execution"
 	"scrc/internal/ports"
@@ -46,7 +48,7 @@ type languageStrategy interface {
 
 // Runner manages execution of scripts inside Docker containers via the official SDK.
 type Runner struct {
-	cli    *client.Client
+	cli    dockerClient
 	limits execution.RunLimits
 	langs  map[execution.Language]*languageRuntime
 }
@@ -56,6 +58,21 @@ type languageRuntime struct {
 	strategy languageStrategy
 	pullOnce sync.Once
 	pullErr  error
+}
+
+type dockerClient interface {
+	Close() error
+	ImagePull(ctx context.Context, ref string, opts image.PullOptions) (io.ReadCloser, error)
+	ContainerCreate(ctx context.Context, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, platform *specs.Platform, containerName string) (container.CreateResponse, error)
+	ContainerRemove(ctx context.Context, containerID string, options container.RemoveOptions) error
+	CopyToContainer(ctx context.Context, containerID, dstPath string, content io.Reader, options container.CopyToContainerOptions) error
+	ContainerAttach(ctx context.Context, containerID string, options container.AttachOptions) (types.HijackedResponse, error)
+	ContainerStart(ctx context.Context, containerID string, options container.StartOptions) error
+	ContainerWait(ctx context.Context, containerID string, condition container.WaitCondition) (<-chan container.WaitResponse, <-chan error)
+	ContainerInspect(ctx context.Context, containerID string) (types.ContainerJSON, error)
+	ContainerLogs(ctx context.Context, containerID string, options container.LogsOptions) (io.ReadCloser, error)
+	ContainerStop(ctx context.Context, containerID string, options container.StopOptions) error
+	CopyFromContainer(ctx context.Context, containerID, srcPath string) (io.ReadCloser, types.ContainerPathStat, error)
 }
 
 // ensure Runner implements ports.Runner.
@@ -72,6 +89,10 @@ func New(cfg Config) (*Runner, error) {
 		return nil, fmt.Errorf("create docker client: %w", err)
 	}
 
+	return newRunner(cli, cfg)
+}
+
+func newRunner(cli dockerClient, cfg Config) (*Runner, error) {
 	langs := make(map[execution.Language]*languageRuntime, len(cfg.Languages))
 	for lang, langCfg := range cfg.Languages {
 		if langCfg.Image == "" {
