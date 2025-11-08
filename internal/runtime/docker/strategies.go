@@ -10,6 +10,8 @@ const (
 	pythonScriptFilename = "script.py"
 	goSourceFilename     = "main.go"
 	goBinaryFilename     = "program"
+	cSourceFilename      = "main.c"
+	cBinaryFilename      = "program"
 )
 
 func strategyForLanguage(lang execution.Language) (languageStrategy, error) {
@@ -18,6 +20,8 @@ func strategyForLanguage(lang execution.Language) (languageStrategy, error) {
 		return &pythonStrategy{}, nil
 	case execution.LanguageGo:
 		return &goStrategy{}, nil
+	case execution.LanguageC:
+		return &cStrategy{}, nil
 	default:
 		return nil, fmt.Errorf("docker runtime: no strategy registered for language %q", lang)
 	}

@@ -8,6 +8,8 @@ const (
 	LanguagePython Language = "python"
 	// LanguageGo represents scripts written in Go.
 	LanguageGo Language = "go"
+	// LanguageC represents scripts written in C.
+	LanguageC Language = "c"
 )
 
 // Script represents a unit of source code ready for execution.
