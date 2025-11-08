@@ -114,6 +114,22 @@ def build_scenarios() -> list[dict]:
         ]
     )
 
+    cpp_sum_script = "\n".join(
+        [
+            "#include <iostream>",
+            "",
+            "int main() {",
+            "    long long value;",
+            "    long long total = 0;",
+            "    while (std::cin >> value) {",
+            "        total += value;",
+            "    }",
+            '    std::cout << total << "\\n";',
+            "    return 0;",
+            "}",
+        ]
+    )
+
     return [
         {
             "base_id": "script-ok",
@@ -193,6 +209,27 @@ def build_scenarios() -> list[dict]:
             "base_id": "script-c-ok",
             "language": "c",
             "source": c_sum_script,
+            "limits": {
+                "time_limit_ms": 2_000,
+                "memory_limit_bytes": 256 * 1024 * 1024,
+            },
+            "tests": [
+                {
+                    "number": 1,
+                    "input": "1 2 3\n",
+                    "expected_output": "6\n",
+                },
+                {
+                    "number": 2,
+                    "input": "10 -5 7\n",
+                    "expected_output": "12\n",
+                },
+            ],
+        },
+        {
+            "base_id": "script-cpp-ok",
+            "language": "cpp",
+            "source": cpp_sum_script,
             "limits": {
                 "time_limit_ms": 2_000,
                 "memory_limit_bytes": 256 * 1024 * 1024,
