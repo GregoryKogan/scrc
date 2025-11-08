@@ -81,6 +81,10 @@ func dockerConfigFromEnv() docker.Config {
 				Image:   envOrDefault("C_IMAGE", cDockerImage),
 				Workdir: envOrDefault("C_WORKDIR", containerWorkdir),
 			},
+			execution.LanguageCPP: {
+				Image:   envOrDefault("CPP_IMAGE", cppDockerImage),
+				Workdir: envOrDefault("CPP_WORKDIR", containerWorkdir),
+			},
 		},
 		DefaultLimits: execution.RunLimits{
 			TimeLimit:        parseDuration(os.Getenv("RUNNER_TIME_LIMIT"), 0),

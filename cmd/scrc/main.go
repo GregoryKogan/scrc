@@ -17,6 +17,7 @@ const (
 	pythonDockerImage        = "python:3.12-alpine"
 	goDockerImage            = "golang:1.22-alpine"
 	cDockerImage             = "gcc:14"
+	cppDockerImage           = "gcc:14"
 	containerWorkdir         = "/tmp"
 	defaultKafkaBrokers      = "kafka:9092"
 	defaultKafkaTopic        = "scripts"

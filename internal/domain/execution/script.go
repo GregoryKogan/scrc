@@ -10,6 +10,8 @@ const (
 	LanguageGo Language = "go"
 	// LanguageC represents scripts written in C.
 	LanguageC Language = "c"
+	// LanguageCPP represents scripts written in C++.
+	LanguageCPP Language = "cpp"
 )
 
 // Script represents a unit of source code ready for execution.
