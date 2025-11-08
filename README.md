@@ -53,3 +53,19 @@ The runner performs a build step first (no-op for Python, compile for Go) and
 then measures the program's execution separately. Build failures are reported
 with the `BF` status code. The sample producer currently emits Python programs,
 but the runner can execute Go submissions as well.
+
+## Testing
+
+Run the fast (unit) suite:
+
+```bash
+go test ./...
+```
+
+Integration tests exercise the Kafka infrastructure and Docker-backed runner.
+They require access to a Docker daemon and will spin up ephemeral containers via
+Testcontainers:
+
+```bash
+go test -tags=integration ./...
+```
