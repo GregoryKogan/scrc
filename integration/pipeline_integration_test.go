@@ -14,8 +14,8 @@ import (
 
 	"scrc/internal/app/executor"
 	"scrc/internal/domain/execution"
-	"scrc/internal/infra/docker"
 	kafkainfra "scrc/internal/infra/kafka"
+	"scrc/internal/runtime/docker"
 	"scrc/internal/testhelpers"
 )
 

@@ -130,14 +130,18 @@ func TestExecuteScriptSuitePrepareError(t *testing.T) {
 	t.Parallel()
 
 	wantErr := errors.New("prepare failed")
-	service := &Service{runtime: &stubRunner{
+	runner := &stubRunner{
 		prepareFn: func(ctx context.Context, script execution.Script) (ports.PreparedScript, *execution.Result, error) {
 			return nil, nil, wantErr
 		},
-	}}
+	}
+	service := &Service{
+		runtime: runner,
+		suites:  newSuiteRunner(runner),
+	}
 
 	script := execution.Script{ID: "s1"}
-	report := service.executeScriptSuite(context.Background(), script)
+	report := service.suites.Run(context.Background(), script)
 	if !errors.Is(report.Err, wantErr) {
 		t.Fatalf("expected report err %v, got %v", wantErr, report.Err)
 	}
@@ -150,14 +154,18 @@ func TestExecuteScriptSuiteBuildResult(t *testing.T) {
 	t.Parallel()
 
 	build := &execution.Result{Status: execution.StatusBuildFail}
-	service := &Service{runtime: &stubRunner{
+	runner := &stubRunner{
 		prepareFn: func(ctx context.Context, script execution.Script) (ports.PreparedScript, *execution.Result, error) {
 			return nil, build, nil
 		},
-	}}
+	}
+	service := &Service{
+		runtime: runner,
+		suites:  newSuiteRunner(runner),
+	}
 
 	script := execution.Script{ID: "build"}
-	report := service.executeScriptSuite(context.Background(), script)
+	report := service.suites.Run(context.Background(), script)
 	if report.Result != build {
 		t.Fatalf("expected build result pointer, got %#v", report.Result)
 	}
@@ -192,11 +200,15 @@ func TestExecuteScriptSuiteWithTests(t *testing.T) {
 		},
 	}
 
-	service := &Service{runtime: &stubRunner{
+	runner := &stubRunner{
 		prepareFn: func(ctx context.Context, script execution.Script) (ports.PreparedScript, *execution.Result, error) {
 			return prepared, nil, nil
 		},
-	}}
+	}
+	service := &Service{
+		runtime: runner,
+		suites:  newSuiteRunner(runner),
+	}
 
 	script := execution.Script{
 		ID: "test-suite",
@@ -207,7 +219,7 @@ func TestExecuteScriptSuiteWithTests(t *testing.T) {
 		},
 	}
 
-	report := service.executeScriptSuite(context.Background(), script)
+	report := service.suites.Run(context.Background(), script)
 	if report.Err == nil || !errors.Is(report.Err, runErr) {
 		t.Fatalf("expected run error %v, got %v", runErr, report.Err)
 	}

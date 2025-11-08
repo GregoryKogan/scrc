@@ -11,7 +11,7 @@ import (
 
 	"scrc/internal/app/executor"
 	"scrc/internal/domain/execution"
-	"scrc/internal/infra/docker"
+	"scrc/internal/runtime/docker"
 )
 
 func TestServiceExecutesScriptsAgainstDocker(t *testing.T) {
