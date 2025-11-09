@@ -76,19 +76,43 @@ docker build --build-arg GO_VERSION=1.26.0 -t scrc .
 
 ## Running with Docker Compose
 
+Use Docker Compose profiles to switch between the single-runner simulator demo
+and a horizontal-scaling demonstration.
+
+### Single Runner (Simulator Demo)
+
 ```bash
-docker compose up --build
+docker compose --profile single-runner --profile load-generator up --build
 ```
 
-This spins up a single-node Kafka cluster, a mock producer container that
-continuously streams sample scripts to Kafka, and the runner service that
-consumes them and executes each script inside Docker. The runner keeps
-processing scripts until it is stopped or its container is terminated. You can
-optionally limit how many scripts to execute by setting the `SCRIPT_EXPECTED`
-environment variable on the runner service.
+This spins up a single-node Kafka cluster, the simulator that continuously
+publishes sample scripts, and a single runner container that executes each
+script inside Docker. The runner keeps processing scripts until it is stopped
+or its container is terminated. You can optionally limit how many scripts to
+execute by setting the `SCRIPT_EXPECTED` environment variable on the runner.
 
-The bundled simulator service (`scrc-simulator`) now publishes and consumes
-scripts in a single process. Adjust its cadence or workload via the environment
+### Horizontal Scaling Demo
+
+```bash
+docker compose --profile multi-runner --profile load-generator up --build --scale scrc=3
+```
+
+This profile launches Kafka/ZooKeeper plus as many runner replicas as you request
+with `--scale`. Each runner shares the same consumer group so Kafka partitions
+are distributed across instances, guaranteeing that every submission is handled
+once. Increase the partition count of the `scripts` topic if you need to
+demonstrate higher parallelism. The optional `load-generator` profile includes
+the simulator so you can feed the runners; omit it and point your own producer at
+Kafka to drive workloads manually.
+
+To run the multi-runner setup without the simulator:
+
+```bash
+docker compose --profile multi-runner up --build --scale scrc=3
+```
+
+The bundled simulator service (`scrc-simulator`) publishes and consumes scripts
+in a single process. Adjust its cadence or workload via the environment
 variables documented below; by default it emits one full batch of scenarios per
 run (`SCRIPT_ITERATIONS=1`).
 

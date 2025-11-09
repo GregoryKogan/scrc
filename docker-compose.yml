@@ -1,7 +1,19 @@
+x-runner-env: &runner-env
+  DOCKER_HOST: unix:///var/run/docker.sock
+  KAFKA_BROKERS: kafka:9092
+  KAFKA_TOPIC: scripts
+  KAFKA_GROUP_ID: scrc-runner
+  KAFKA_RESULTS_TOPIC: script-results
+  RUNNER_MAX_PARALLEL: 8
+
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.7.0
     container_name: zookeeper
+    profiles:
+      - single-runner
+      - multi-runner
+      - load-generator
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -15,6 +27,10 @@ services:
   kafka:
     image: confluentinc/cp-kafka:7.7.0
     container_name: kafka
+    profiles:
+      - single-runner
+      - multi-runner
+      - load-generator
     depends_on:
       zookeeper:
         condition: service_healthy
@@ -39,21 +55,21 @@ services:
 
   scrc:
     build: .
+    profiles:
+      - single-runner
+      - multi-runner
     depends_on:
       kafka:
         condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - DOCKER_HOST=unix:///var/run/docker.sock
-      - KAFKA_BROKERS=kafka:9092
-      - KAFKA_TOPIC=scripts
-      - KAFKA_GROUP_ID=scrc-runner
-      - KAFKA_RESULTS_TOPIC=script-results
-      - RUNNER_MAX_PARALLEL=8
+    environment: *runner-env
 
   scrc-simulator:
     build: ./simulator
+    profiles:
+      - single-runner
+      - load-generator
     depends_on:
       kafka:
         condition: service_healthy
