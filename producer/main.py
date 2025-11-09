@@ -130,6 +130,23 @@ def build_scenarios() -> list[dict]:
         ]
     )
 
+    java_sum_script = "\n".join(
+        [
+            "import java.util.Scanner;",
+            "",
+            "public class Main {",
+            "    public static void main(String[] args) {",
+            "        Scanner scanner = new Scanner(System.in);",
+            "        long total = 0;",
+            "        while (scanner.hasNextLong()) {",
+            "            total += scanner.nextLong();",
+            "        }",
+            "        System.out.println(total);",
+            "    }",
+            "}",
+        ]
+    )
+
     return [
         {
             "base_id": "script-ok",
@@ -230,6 +247,27 @@ def build_scenarios() -> list[dict]:
             "base_id": "script-cpp-ok",
             "language": "cpp",
             "source": cpp_sum_script,
+            "limits": {
+                "time_limit_ms": 2_000,
+                "memory_limit_bytes": 256 * 1024 * 1024,
+            },
+            "tests": [
+                {
+                    "number": 1,
+                    "input": "1 2 3\n",
+                    "expected_output": "6\n",
+                },
+                {
+                    "number": 2,
+                    "input": "10 -5 7\n",
+                    "expected_output": "12\n",
+                },
+            ],
+        },
+        {
+            "base_id": "script-java-ok",
+            "language": "java",
+            "source": java_sum_script,
             "limits": {
                 "time_limit_ms": 2_000,
                 "memory_limit_bytes": 256 * 1024 * 1024,

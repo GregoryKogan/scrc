@@ -14,7 +14,7 @@ containerized and isolated.
 1. **Kafka consumer** reads script submissions that contain the source code,
    requested language, optional resource limits, and test cases.
 2. **Runtime registry** selects the appropriate language module and prepares the
-   submission. For compiled languages (e.g. Go, C, C++) this includes a build step; for
+   submission. For compiled languages (e.g. Go, C, C++, Java) this includes a build step; for
    interpreted languages (e.g. Python) it produces a ready-to-run container
    invocation.
 3. **Docker runtime** executes the program inside an ephemeral container,
@@ -99,20 +99,21 @@ directory via environment variables:
 - `GO_IMAGE` / `GO_WORKDIR` (default image `golang:1.22-alpine`)
 - `C_IMAGE` / `C_WORKDIR` (default image `gcc:14`)
 - `CPP_IMAGE` / `CPP_WORKDIR` (default image `gcc:14`)
+- `JAVA_IMAGE` / `JAVA_WORKDIR` (default image `eclipse-temurin:21-jdk-alpine`)
 
 ## Script Payload
 
 Messages published to the scripts topic must include:
 
 - `id`: unique identifier for the submission
-- `language`: execution language (e.g. `python`, `go`, `c`, `cpp`)
+- `language`: execution language (e.g. `python`, `go`, `c`, `cpp`, `java`)
 - `source`: program source code
 - `limits` (optional): time and memory limits
 - `tests` (optional): input/output expectations
 
-The runner performs a build step first (no-op for Python, compile for Go, C, and C++) and
+The runner performs a build step first (no-op for Python, compile for Go, C, C++, and Java) and
 then measures the program's execution separately. Build failures are reported
-with the `BF` status code. The sample producer currently emits Python, Go, C, and C++
+with the `BF` status code. The sample producer currently emits Python, Go, C, C++, and Java
 programs.
 
 ## Testing
