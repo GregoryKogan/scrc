@@ -1,15 +1,44 @@
+from __future__ import annotations
+
+import collections
 import json
-import os
-import sys
+import logging
+import threading
 import time
+from pathlib import Path
+from typing import Optional
 
 import six
 
-sys.modules.setdefault("kafka.vendor.six", six)
-sys.modules.setdefault("kafka.vendor.six.moves", six.moves)
+sys_modules = __import__("sys").modules
+sys_modules.setdefault("kafka.vendor.six", six)
+sys_modules.setdefault("kafka.vendor.six.moves", six.moves)
 
 from kafka import KafkaConsumer
 from kafka.errors import NoBrokersAvailable
+
+BASE_DIR = Path(__file__).resolve().parent
+DEFAULT_LOG_PATH = BASE_DIR / "consumer.log"
+POLL_TIMEOUT_MS_DEFAULT = 1_000
+
+
+class ResultConsumerError(Exception):
+    """Raised when the result consumer encounters a fatal condition."""
+
+
+def configure_logger(log_path: Path) -> logging.Logger:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    logger = logging.getLogger("scrc_simulator.consumer")
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+    handler = logging.FileHandler(log_path, mode="w", encoding="utf-8")
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+    handler.setFormatter(formatter)
+
+    logger.handlers.clear()
+    logger.addHandler(handler)
+    return logger
 
 
 def create_consumer(broker: str, topic: str, group_id: str) -> KafkaConsumer:
@@ -30,7 +59,7 @@ def create_consumer(broker: str, topic: str, group_id: str) -> KafkaConsumer:
             )
         except NoBrokersAvailable as exc:
             if time.time() >= deadline:
-                raise RuntimeError(
+                raise ResultConsumerError(
                     "failed to connect to Kafka broker within 60 seconds"
                 ) from exc
 
@@ -38,7 +67,7 @@ def create_consumer(broker: str, topic: str, group_id: str) -> KafkaConsumer:
             backoff = min(backoff * 1.5, max_backoff)
 
 
-def format_result(record_key: str | None, payload: dict) -> str:
+def format_result(record_key: Optional[str], payload: dict) -> str:
     script_id = payload.get("id") or record_key or "<unknown>"
     status = payload.get("status")
     exit_code = payload.get("exit_code")
@@ -106,24 +135,67 @@ def format_result(record_key: str | None, payload: dict) -> str:
     return "\n".join(lines)
 
 
-def main() -> None:
-    broker = os.environ.get("KAFKA_BROKER", "kafka:9092")
-    topic = os.environ.get("KAFKA_RESULTS_TOPIC", "script-results")
-    group_id = os.environ.get("KAFKA_CONSUMER_GROUP", "scrc-results-consumer")
-
-    consumer = create_consumer(broker, topic, group_id)
-
-    try:
-        for message in consumer:
-            try:
-                print(format_result(message.key, message.value), flush=True)
-            except Exception as exc:  # noqa: BLE001
-                print(f"failed to format message: {exc!r}", file=sys.stderr, flush=True)
-    except KeyboardInterrupt:
-        print("stopping results consumer", file=sys.stderr, flush=True)
-    finally:
-        consumer.close()
+def infer_script_type(script_id: Optional[str]) -> Optional[str]:
+    if not script_id:
+        return None
+    if "-" not in script_id:
+        return None
+    prefix, _, suffix = script_id.rpartition("-")
+    if not prefix or not suffix:
+        return None
+    return prefix
 
 
-if __name__ == "__main__":
-    main()
+class ResultConsumerService:
+    def __init__(
+        self,
+        consumer: KafkaConsumer,
+        logger: logging.Logger,
+        poll_timeout_ms: int,
+    ) -> None:
+        self._consumer = consumer
+        self._logger = logger
+        self._poll_timeout_ms = poll_timeout_ms
+        self.counters: collections.Counter[str] = collections.Counter()
+        self._lock = threading.Lock()
+
+    def consume(self, stop_event: threading.Event | None = None) -> None:
+        while True:
+            if stop_event is not None and stop_event.is_set():
+                break
+
+            records = self._consumer.poll(timeout_ms=self._poll_timeout_ms)
+            if not records:
+                continue
+
+            for batch in records.values():
+                for message in batch:
+                    try:
+                        summary = format_result(message.key, message.value)
+                        self._logger.info(summary)
+                        script_type = infer_script_type(message.value.get("id") or message.key)
+                        if script_type:
+                            with self._lock:
+                                self.counters[script_type] += 1
+                    except Exception:  # noqa: BLE001
+                        self._logger.exception("failed to process message")
+
+    def close(self) -> None:
+        self._consumer.close()
+        for handler in list(self._logger.handlers):
+            handler.close()
+            self._logger.removeHandler(handler)
+
+    def snapshot_counters(self) -> dict[str, int]:
+        with self._lock:
+            return dict(self.counters)
+
+
+__all__ = [
+    "DEFAULT_LOG_PATH",
+    "POLL_TIMEOUT_MS_DEFAULT",
+    "ResultConsumerError",
+    "configure_logger",
+    "create_consumer",
+    "ResultConsumerService",
+]
