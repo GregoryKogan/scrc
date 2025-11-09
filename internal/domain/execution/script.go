@@ -12,6 +12,8 @@ const (
 	LanguageC Language = "c"
 	// LanguageCPP represents scripts written in C++.
 	LanguageCPP Language = "cpp"
+	// LanguageJava represents scripts written in Java.
+	LanguageJava Language = "java"
 )
 
 // Script represents a unit of source code ready for execution.

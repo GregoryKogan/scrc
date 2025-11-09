@@ -85,6 +85,10 @@ func dockerConfigFromEnv() docker.Config {
 				Image:   envOrDefault("CPP_IMAGE", cppDockerImage),
 				Workdir: envOrDefault("CPP_WORKDIR", containerWorkdir),
 			},
+			execution.LanguageJava: {
+				Image:   envOrDefault("JAVA_IMAGE", javaDockerImage),
+				Workdir: envOrDefault("JAVA_WORKDIR", containerWorkdir),
+			},
 		},
 		DefaultLimits: execution.RunLimits{
 			TimeLimit:        parseDuration(os.Getenv("RUNNER_TIME_LIMIT"), 0),

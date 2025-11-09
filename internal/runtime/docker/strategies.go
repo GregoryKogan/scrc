@@ -14,6 +14,8 @@ const (
 	cBinaryFilename      = "program"
 	cppSourceFilename    = "main.cpp"
 	cppBinaryFilename    = "program"
+	javaSourceFilename   = "Main.java"
+	javaBinaryFilename   = "program.jar"
 )
 
 func strategyForLanguage(lang execution.Language) (languageStrategy, error) {
@@ -26,6 +28,8 @@ func strategyForLanguage(lang execution.Language) (languageStrategy, error) {
 		return &cStrategy{}, nil
 	case execution.LanguageCPP:
 		return &cppStrategy{}, nil
+	case execution.LanguageJava:
+		return &javaStrategy{}, nil
 	default:
 		return nil, fmt.Errorf("docker runtime: no strategy registered for language %q", lang)
 	}
