@@ -87,8 +87,40 @@ processing scripts until it is stopped or its container is terminated. You can
 optionally limit how many scripts to execute by setting the `SCRIPT_EXPECTED`
 environment variable on the runner service.
 
-The producer emits a new script roughly once per second by default; change the
-cadence by setting `SCRIPT_INTERVAL_SECONDS` on the producer container.
+The bundled simulator service (`scrc-simulator`) now publishes and consumes
+scripts in a single process. Adjust its cadence or workload via the environment
+variables documented below; by default it emits one full batch of scenarios per
+run (`SCRIPT_ITERATIONS=1`).
+
+### Simulator
+
+A Python harness in `simulator/main.py` coordinates both the sample
+producer and the result consumer so you can verify that every emitted script
+eventually appears on the results topic. The runner:
+
+- Loads language/outcome scripts from `simulator/scripts/<language>/<outcome>`.
+- Publishes each combination (`python-ok`, `python-wa`, …, `java-bf`) for the
+  configured number of iterations.
+- Tails the results topic, persisting detailed logs to `simulator/consumer.log`.
+- Compares produced vs consumed counters and reports mismatches before exiting.
+
+Run it with:
+
+```bash
+python -m simulator.main
+```
+
+Tweak behavior via the existing environment variables:
+
+- `SCRIPT_ITERATIONS` caps producer iterations (defaults to `1` for the combined run).
+- `SCRIPT_INTERVAL_SECONDS` adjusts the delay between iteration batches.
+- `RESULT_WAIT_TIMEOUT_SECONDS` controls how long to wait for matching results
+  (defaults to `60` seconds).
+- `RESULT_CONSUMER_LOG_PATH` relocates the log file if needed.
+
+The process exits non-zero if any discrepancy is detected between produced and
+consumed scripts, or if the consumer fails to observe all expected results
+before timing out.
 
 ### Language Runtimes
 
