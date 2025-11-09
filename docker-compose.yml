@@ -52,22 +52,20 @@ services:
       - KAFKA_RESULTS_TOPIC=script-results
       - RUNNER_MAX_PARALLEL=8
 
-  scrc-producer:
-    build: ./producer
+  scrc-simulator:
+    build: ./simulator
     depends_on:
       kafka:
         condition: service_healthy
-    environment:
-      - KAFKA_BROKER=kafka:9092
-      - KAFKA_TOPIC=scripts
-
-  scrc-results-consumer:
-    build: ./result-consumer
-    depends_on:
-      kafka:
-        condition: service_healthy
+    volumes:
+      - ./logs/simulator:/app/logs
     environment:
       - KAFKA_BROKER=kafka:9092
       - KAFKA_RESULTS_TOPIC=script-results
-      - KAFKA_CONSUMER_GROUP=scrc-results-consumer
-
+      - KAFKA_TOPIC=scripts
+      - KAFKA_CONSUMER_GROUP=scrc-simulator
+      - SCRIPT_INTERVAL_SECONDS=1
+      - SCRIPT_ITERATIONS=1
+      - RESULT_WAIT_TIMEOUT_SECONDS=60
+      - CONSUMER_POLL_TIMEOUT_MS=1000
+      - RESULT_CONSUMER_LOG_PATH=/app/logs/consumer.log
