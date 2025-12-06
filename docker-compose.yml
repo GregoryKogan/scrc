@@ -14,6 +14,7 @@ services:
       - single-runner
       - multi-runner
       - load-generator
+      - benchmark
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -31,6 +32,7 @@ services:
       - single-runner
       - multi-runner
       - load-generator
+      - benchmark
     depends_on:
       zookeeper:
         condition: service_healthy
@@ -55,6 +57,7 @@ services:
 
   scrc:
     build: .
+    image: scrc:latest
     profiles:
       - single-runner
       - multi-runner
@@ -67,6 +70,7 @@ services:
 
   scrc-simulator:
     build: ./simulator
+    image: scrc-simulator:latest
     profiles:
       - single-runner
       - load-generator
@@ -85,3 +89,26 @@ services:
       - RESULT_WAIT_TIMEOUT_SECONDS=60
       - CONSUMER_POLL_TIMEOUT_MS=1000
       - RESULT_CONSUMER_LOG_PATH=/app/logs/consumer.log
+
+  scrc-benchmark:
+    build: ./simulator
+    image: scrc-benchmark:latest
+    profiles:
+      - benchmark
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./logs/benchmarks:/app/logs/benchmarks
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - KAFKA_BROKER=kafka:9092
+      - KAFKA_TOPIC=scripts
+      - KAFKA_RESULTS_TOPIC=script-results
+      - KAFKA_CONSUMER_GROUP=scrc-benchmark
+      - BENCHMARK_OUTPUT_DIR=/app/logs/benchmarks
+      - BENCHMARK_LOG_LEVEL=INFO
+      - SCRC_RUNNER_IMAGE=scrc:latest
+      - SCRC_RUNNER_ENV={"DOCKER_HOST":"unix:///var/run/docker.sock"}
+    entrypoint: ["python", "-m", "simulator.benchmarks"]
+    command: []
