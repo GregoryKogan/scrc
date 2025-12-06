@@ -1,2 +1,7 @@
 kafka-python==2.0.2
 six==1.16.0
+docker==7.1.0
+matplotlib==3.9.2
+numpy==2.1.2
+pandas==2.2.3
+seaborn==0.13.2
