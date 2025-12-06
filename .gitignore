@@ -14,12 +14,24 @@
 *.test
 *.out
 
+# Python build outputs
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+
 # Local binaries
 /scrc
 !/cmd/scrc/
 bin/
 
+# Logs
+logs/**
+!logs/**/
+!logs/**/*.png
+
 # Temporary files
 *.log
 *.tmp
-
