@@ -146,6 +146,112 @@ The process exits non-zero if any discrepancy is detected between produced and
 consumed scripts, or if the consumer fails to observe all expected results
 before timing out.
 
+### Benchmark Suite
+
+The benchmark harness orchestrates randomized simulator loads, sweeps runner
+concurrency/replica configurations, and renders presentation-ready charts in
+`logs/benchmarks`.
+
+1. Build the runner image (needed so the harness can launch on-demand runners):
+
+   ```bash
+   docker compose build scrc
+   ```
+
+2. Launch the benchmark profile (this will start Kafka/ZooKeeper plus the harness
+   container; it will terminate automatically once all matrices finish):
+
+   ```bash
+   docker compose --profile benchmark up --build scrc-benchmark
+   ```
+
+3. Inspect the outputs in `logs/benchmarks/`:
+
+   - `single_runner_throughput.png` — throughput vs `RUNNER_MAX_PARALLEL`
+   - `scaling_heatmap.png` — throughput heatmap across runner replicas × parallelism
+   - `language_latency_heatmap.png` — median latency summary by language & outcome
+   - `language_latency_boxplot.png` — detailed latency distributions per language/outcome
+   - `timeout_impact.png` — effect of timeout-heavy submissions on throughput
+   - `language_throughput.png` — share of throughput per language/outcome
+   - `benchmark_manifest.json` — manifest summarizing generated artifacts
+   - CSV snapshots for each benchmark case
+
+Use the environment variables documented in `simulator/benchmarks/main.py` to
+customize broker endpoints, output paths, or override the benchmark plan.
+
+#### Benchmark Results
+
+The benchmark suite generates several charts that provide insights into system
+performance, scalability, and language-specific characteristics:
+
+**Single Runner Throughput** (`single_runner_throughput.png`)
+![Single Runner Throughput](logs/benchmarks/single_runner_throughput.png)
+
+Shows how throughput (submissions per minute) scales with `RUNNER_MAX_PARALLEL`
+for a single runner instance under medium load. This helps identify the optimal
+parallelism setting for a single runner. Typically, throughput increases with
+parallelism up to a point where resource contention or overhead begins to
+dominate.
+
+**Scaling Heatmap** (`scaling_heatmap.png`)
+![Scaling Heatmap](logs/benchmarks/scaling_heatmap.png)
+
+A heatmap visualizing throughput across different combinations of runner replicas
+and parallelism values. Darker colors indicate higher throughput. This chart
+helps answer questions like:
+
+- What combination of replicas and parallelism yields the best throughput?
+- Does horizontal scaling (more replicas) or vertical scaling (more parallelism)
+  provide better performance?
+- Where are the performance sweet spots in the configuration space?
+
+**Language Latency Heatmap** (`language_latency_heatmap.png`)
+![Language Latency Heatmap](logs/benchmarks/language_latency_heatmap.png)
+
+A summary view showing median latency (in seconds) for each language-outcome
+combination. The color intensity indicates latency magnitude, with darker reds
+representing higher latencies. Key insights:
+
+- Which languages are fastest/slowest for different outcome types
+- Memory limit (ML) outcomes typically have very low latency across all
+  languages (quick detection)
+- Time limit (TL) outcomes show varying latencies depending on language
+- Go often shows higher latencies for OK/WA outcomes due to compilation overhead
+
+**Language Latency Distribution** (`language_latency_boxplot.png`)
+![Language Latency Boxplot](logs/benchmarks/language_latency_boxplot.png)
+
+Detailed box plots showing the full distribution of latencies for each
+language-outcome pair. The boxes show quartiles (25th, 50th, 75th percentiles)
+with whiskers extending to show the range. This reveals:
+
+- Variability in execution times (wider boxes = more variance)
+- Outliers and extreme cases
+- Differences in latency distributions between languages for the same outcome
+- Whether certain languages have more consistent or more variable performance
+
+**Timeout Impact** (`timeout_impact.png`)
+![Timeout Impact](logs/benchmarks/timeout_impact.png)
+
+Compares throughput between a baseline workload and a timeout-heavy workload
+(where TL submissions are weighted 2.5x higher). This answers:
+
+- Do timeout-heavy submissions significantly impact overall system throughput?
+- How well does the system handle workloads with many long-running submissions?
+- Whether timeout detection and cleanup is efficient
+
+**Language Throughput Share** (`language_throughput.png`)
+![Language Throughput](logs/benchmarks/language_throughput.png)
+
+A stacked bar chart showing the percentage distribution of submissions across
+languages and outcomes under heavy load. Each bar represents 100% of
+submissions, with colored segments showing the proportion of each outcome type
+per language. This reveals:
+
+- Which languages dominate the workload
+- The distribution of outcomes (OK, WA, TL, ML, BF) per language
+- Whether certain languages tend to produce more of certain outcome types
+
 ### Language Runtimes
 
 Each language runtime can be customized by overriding the container image or working
