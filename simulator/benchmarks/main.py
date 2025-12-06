@@ -24,10 +24,19 @@ LOGGER = logging.getLogger("scrc_simulator.benchmark")
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="SCRC Benchmark Harness")
-    parser.add_argument("--broker", default=os.environ.get("KAFKA_BROKER", "kafka:9092"))
-    parser.add_argument("--script-topic", default=os.environ.get("KAFKA_TOPIC", "scripts"))
-    parser.add_argument("--results-topic", default=os.environ.get("KAFKA_RESULTS_TOPIC", "script-results"))
-    parser.add_argument("--group-id", default=os.environ.get("KAFKA_CONSUMER_GROUP", "scrc-benchmark"))
+    parser.add_argument(
+        "--broker", default=os.environ.get("KAFKA_BROKER", "kafka:9092")
+    )
+    parser.add_argument(
+        "--script-topic", default=os.environ.get("KAFKA_TOPIC", "scripts")
+    )
+    parser.add_argument(
+        "--results-topic",
+        default=os.environ.get("KAFKA_RESULTS_TOPIC", "script-results"),
+    )
+    parser.add_argument(
+        "--group-id", default=os.environ.get("KAFKA_CONSUMER_GROUP", "scrc-benchmark")
+    )
     parser.add_argument(
         "--runner-image",
         default=os.environ.get("SCRC_RUNNER_IMAGE", "scrc:latest"),
@@ -87,7 +96,9 @@ def discover_networks(env_override: str | None) -> list[str]:
         if not container_id:
             raise RuntimeError("Unable to determine container id from cgroup")
         container = client.containers.get(container_id)
-        networks = list(container.attrs.get("NetworkSettings", {}).get("Networks", {}).keys())
+        networks = list(
+            container.attrs.get("NetworkSettings", {}).get("Networks", {}).keys()
+        )
         if networks:
             return networks
     except Exception:
@@ -129,117 +140,131 @@ def main(argv: list[str] | None = None) -> int:
         network_names=networks,
     )
 
-        suite_results = {}
-        for matrix in plan:
-            LOGGER.info("Executing benchmark matrix: %s", matrix.label)
-            matrix_results: dict[str, pd.DataFrame] = {}
-            throughput_summary: dict[str, float] = {}
-            for case in matrix.cases:
-                if matrix.chart_type in {"line", "heatmap"}:
-                    case_key = case.scale_key()
-                else:
-                    case_key = case.name
-                LOGGER.info(
-                    "Running case %s (load=%s, replicas=%d, parallel=%d, runs=%d)",
-                    case.name,
-                    case.load_profile.name,
-                    case.runner_replicas,
-                    case.runner_parallelism,
-                    case.num_runs,
+    suite_results = {}
+    for matrix in plan:
+        LOGGER.info("Executing benchmark matrix: %s", matrix.label)
+        matrix_results: dict[str, pd.DataFrame] = {}
+        throughput_summary: dict[str, float] = {}
+        for case in matrix.cases:
+            if matrix.chart_type in {"line", "heatmap"}:
+                case_key = case.scale_key()
+            else:
+                case_key = case.name
+            LOGGER.info(
+                "Running case %s (load=%s, replicas=%d, parallel=%d, runs=%d)",
+                case.name,
+                case.load_profile.name,
+                case.runner_replicas,
+                case.runner_parallelism,
+                case.num_runs,
+            )
+            with runner_manager.run(
+                RunnerConfig(
+                    replicas=case.runner_replicas,
+                    parallelism=case.runner_parallelism,
+                    environment={
+                        "KAFKA_BROKERS": args.broker,
+                        "KAFKA_TOPIC": args.script_topic,
+                        "KAFKA_RESULTS_TOPIC": args.results_topic,
+                        "KAFKA_GROUP_ID": args.group_id,
+                    },
                 )
-                with runner_manager.run(
-                    RunnerConfig(
-                        replicas=case.runner_replicas,
-                        parallelism=case.runner_parallelism,
-                        environment={
-                            "KAFKA_BROKERS": args.broker,
-                            "KAFKA_TOPIC": args.script_topic,
-                            "KAFKA_RESULTS_TOPIC": args.results_topic,
-                            "KAFKA_GROUP_ID": args.group_id,
-                        },
+            ):
+                run_dataframes: list[pd.DataFrame] = []
+                run_throughputs: list[float] = []
+
+                for run_num in range(1, case.num_runs + 1):
+                    LOGGER.info(
+                        "  Run %d/%d for case %s",
+                        run_num,
+                        case.num_runs,
+                        case.name,
                     )
-                ):
-                    run_dataframes: list[pd.DataFrame] = []
-                    run_throughputs: list[float] = []
-                    
-                    for run_num in range(1, case.num_runs + 1):
-                        LOGGER.info(
-                            "  Run %d/%d for case %s",
-                            run_num,
-                            case.num_runs,
-                            case.name,
-                        )
-                        collector = BenchmarkResultCollector(
-                            broker=args.broker,
-                            results_topic=args.results_topic,
-                            group_id=f"{args.group_id}-{case.name}-run{run_num}",
-                            log_path=SIMULATOR_LOG_PATH,
-                        )
-                        collector.start()
-                        load_generator = BenchmarkLoadGenerator(
-                            broker=args.broker,
-                            topic=args.script_topic,
-                            profile=case.load_profile,
-                            collector_callback=collector.register_submission,
-                        )
+                    collector = BenchmarkResultCollector(
+                        broker=args.broker,
+                        results_topic=args.results_topic,
+                        group_id=f"{args.group_id}-{case.name}-run{run_num}",
+                        log_path=SIMULATOR_LOG_PATH,
+                    )
+                    collector.start()
+                    load_generator = BenchmarkLoadGenerator(
+                        broker=args.broker,
+                        topic=args.script_topic,
+                        profile=case.load_profile,
+                        collector_callback=collector.register_submission,
+                    )
 
-                        # Warmup period
-                        time.sleep(case.warmup_seconds)
-                        
-                        # Record benchmark start time
-                        benchmark_start_ts = time.time()
-                        
-                        # Run load generation for the specified duration
-                        stats = load_generator.run(case.duration_seconds)
-                        
-                        # Record benchmark end time
-                        benchmark_end_ts = time.time()
-                        
-                        # Set the measurement window for filtering
-                        collector.set_benchmark_window(benchmark_start_ts, benchmark_end_ts)
-                        
-                        # Cooldown period
-                        time.sleep(case.cooldown_seconds)
-                        
-                        # Wait for pending results with extended timeout
-                        collector.wait_for_pending(timeout_s=case.cooldown_seconds + 30.0)
-                        collector.stop()
+                    # Warmup period
+                    time.sleep(case.warmup_seconds)
 
-                        # Build dataframe with filtering enabled
-                        df = collector.build_dataframe(filter_window=True)
-                        run_dataframes.append(df)
-                        run_throughputs.append(stats.throughput_per_minute)
+                    # Record benchmark start time
+                    benchmark_start_ts = time.time()
 
-                        # Save individual run CSV
-                        df_path = output_dir / f"{matrix.label}__{case.name}__run-{run_num}.csv"
-                        df.to_csv(df_path, index=False)
-                        LOGGER.info(
-                            "  Saved run %d results to %s (%d rows, throughput %.2f submissions/min)",
-                            run_num,
-                            df_path,
-                            len(df),
-                            stats.throughput_per_minute,
-                        )
-                    
-                    # Aggregate results across all runs
-                    if run_dataframes:
-                        aggregated_df = pd.concat(run_dataframes, ignore_index=True)
-                        avg_throughput = sum(run_throughputs) / len(run_throughputs)
-                        
-                        matrix_results[case_key] = aggregated_df
-                        throughput_summary[case_key] = avg_throughput
+                    # Run load generation for the specified duration
+                    stats = load_generator.run(case.duration_seconds)
 
-                        # Save aggregated CSV
-                        aggregated_path = output_dir / f"{matrix.label}__{case.name}__aggregated.csv"
-                        aggregated_df.to_csv(aggregated_path, index=False)
-                        LOGGER.info(
-                            "Saved aggregated results to %s (%d rows, avg throughput %.2f submissions/min)",
-                            aggregated_path,
-                            len(aggregated_df),
-                            avg_throughput,
-                        )
+                    # Record benchmark end time
+                    benchmark_end_ts = time.time()
 
-        chart_path = render_matrix_charts(matrix, matrix_results, throughput_summary, output_dir)
+                    # Set the measurement window for filtering
+                    collector.set_benchmark_window(benchmark_start_ts, benchmark_end_ts)
+
+                    # Cooldown period
+                    time.sleep(case.cooldown_seconds)
+
+                    # Wait for pending results with extended timeout
+                    collector.wait_for_pending(timeout_s=case.cooldown_seconds + 30.0)
+                    collector.stop()
+
+                    # Build dataframe with filtering enabled
+                    df = collector.build_dataframe(filter_window=True)
+                    run_dataframes.append(df)
+                    run_throughputs.append(stats.throughput_per_minute)
+
+                    # Save individual run CSV
+                    df_path = (
+                        output_dir / f"{matrix.label}__{case.name}__run-{run_num}.csv"
+                    )
+                    df.to_csv(df_path, index=False)
+                    LOGGER.info(
+                        "  Saved run %d results to %s (%d rows, throughput %.2f submissions/min)",
+                        run_num,
+                        df_path,
+                        len(df),
+                        stats.throughput_per_minute,
+                    )
+
+                # Aggregate results across all runs
+                if run_dataframes:
+                    aggregated_df = pd.concat(run_dataframes, ignore_index=True)
+                    avg_throughput = sum(run_throughputs) / len(run_throughputs)
+
+                    matrix_results[case_key] = aggregated_df
+                    throughput_summary[case_key] = avg_throughput
+
+                    # Save aggregated CSV
+                    aggregated_path = (
+                        output_dir / f"{matrix.label}__{case.name}__aggregated.csv"
+                    )
+                    aggregated_df.to_csv(aggregated_path, index=False)
+                    LOGGER.info(
+                        "Saved aggregated results to %s (%d rows, avg throughput %.2f submissions/min)",
+                        aggregated_path,
+                        len(aggregated_df),
+                        avg_throughput,
+                    )
+
+        chart_path = render_matrix_charts(
+            matrix, matrix_results, throughput_summary, output_dir
+        )
+        suite_results[matrix.label] = {
+            "chart": str(chart_path),
+            "cases": list(throughput_summary.items()),
+        }
+
+        chart_path = render_matrix_charts(
+            matrix, matrix_results, throughput_summary, output_dir
+        )
         suite_results[matrix.label] = {
             "chart": str(chart_path),
             "cases": list(throughput_summary.items()),
@@ -266,4 +291,3 @@ def _print_plan(plan: BenchmarkPlan) -> None:
 
 if __name__ == "__main__":
     sys.exit(main())
-
