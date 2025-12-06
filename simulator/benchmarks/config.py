@@ -38,6 +38,8 @@ class BenchmarkCase:
     warmup_seconds: int
     runner_parallelism: int
     runner_replicas: int = 1
+    cooldown_seconds: int = 60
+    num_runs: int = 3
     notes: str | None = None
 
     def scale_key(self) -> str:
@@ -114,8 +116,8 @@ def default_benchmark_plan() -> BenchmarkPlan:
                 BenchmarkCase(
                     name=f"single-runner-parallel-{parallel}",
                     load_profile=medium,
-                    duration_seconds=180,
-                    warmup_seconds=20,
+                    duration_seconds=240,
+                    warmup_seconds=60,
                     runner_parallelism=parallel,
                 )
                 for parallel in (1, 2, 4, 6, 8, 12, 16)
@@ -131,8 +133,8 @@ def default_benchmark_plan() -> BenchmarkPlan:
                 BenchmarkCase(
                     name="language-latency-baseline",
                     load_profile=light,
-                    duration_seconds=180,
-                    warmup_seconds=20,
+                    duration_seconds=300,
+                    warmup_seconds=60,
                     runner_parallelism=8,
                 )
             ],
@@ -147,8 +149,8 @@ def default_benchmark_plan() -> BenchmarkPlan:
                 BenchmarkCase(
                     name=f"scale-{replicas}x{parallel}",
                     load_profile=medium,
-                    duration_seconds=160,
-                    warmup_seconds=20,
+                    duration_seconds=240,
+                    warmup_seconds=60,
                     runner_parallelism=parallel,
                     runner_replicas=replicas,
                 )
@@ -166,15 +168,15 @@ def default_benchmark_plan() -> BenchmarkPlan:
                 BenchmarkCase(
                     name="timeout-baseline",
                     load_profile=medium,
-                    duration_seconds=150,
-                    warmup_seconds=20,
+                    duration_seconds=240,
+                    warmup_seconds=60,
                     runner_parallelism=8,
                 ),
                 BenchmarkCase(
                     name="timeout-heavy",
                     load_profile=timeout_heavy,
-                    duration_seconds=150,
-                    warmup_seconds=20,
+                    duration_seconds=240,
+                    warmup_seconds=60,
                     runner_parallelism=8,
                     notes="TL-weighted workload",
                 ),
@@ -190,8 +192,8 @@ def default_benchmark_plan() -> BenchmarkPlan:
                 BenchmarkCase(
                     name="language-throughput-heavy",
                     load_profile=heavy,
-                    duration_seconds=180,
-                    warmup_seconds=20,
+                    duration_seconds=240,
+                    warmup_seconds=60,
                     runner_parallelism=12,
                     runner_replicas=2,
                 )

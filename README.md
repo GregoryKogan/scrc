@@ -179,6 +179,83 @@ concurrency/replica configurations, and renders presentation-ready charts in
 Use the environment variables documented in `simulator/benchmarks/main.py` to
 customize broker endpoints, output paths, or override the benchmark plan.
 
+#### Benchmarking Strategy
+
+The benchmark suite employs a rigorous methodology designed to minimize noise and
+produce statistically reliable results.
+
+##### Multiple Runs with Aggregation
+
+Each benchmark case executes 3 times by default (`num_runs=3`):
+
+- Results from all runs are aggregated to reduce variance
+- Throughput metrics are averaged across runs
+- Individual run data is preserved in `{case}__run-{N}.csv` files
+- Aggregated results are stored in `{case}__aggregated.csv` for analysis
+
+##### Warmup Period
+
+A 60-second warmup period precedes each measurement window:
+
+- Allows the system to reach steady state:
+  - Docker image layers are cached
+  - JVM warmup completes (for Java)
+  - Container pool stabilizes
+  - System resources reach equilibrium
+- Data collected during warmup is excluded from results
+
+##### Measurement Window
+
+Active measurement occurs for 240-300 seconds (depending on benchmark type):
+
+- Language latency benchmarks use 300s for larger sample sizes
+- Throughput benchmarks use 240s for balance between accuracy and time
+- Only submissions that start during the measurement window are included
+- Submissions that complete during cooldown are still counted if they started during measurement
+
+##### Cooldown Period
+
+A 60-second cooldown period follows each measurement window:
+
+- Allows in-flight submissions to complete naturally
+- Prevents premature termination from skewing results
+- Data from submissions that start during cooldown is excluded
+
+##### Data Filtering
+
+The collector tracks precise timestamps for the measurement window:
+
+- Results are filtered to exclude:
+  - Submissions sent during warmup (`sent_ts < benchmark_start_ts`)
+  - Submissions sent during cooldown (`sent_ts >= benchmark_end_ts`)
+- This ensures only steady-state measurements are included in analysis
+
+##### Timing Configuration
+
+- Warmup: 60 seconds (allows system stabilization)
+- Duration: 240-300 seconds (provides sufficient sample size)
+- Cooldown: 60 seconds (allows in-flight work to complete)
+- Runs per case: 3 (reduces variance through aggregation)
+- Total time per case: ~6.5-7 minutes (including overhead)
+- Full suite: ~7-7.5 hours (23 cases × 3 runs)
+
+##### Statistical Reliability
+
+- Multiple runs reduce the impact of transient system conditions
+- Longer durations provide larger sample sizes for more accurate statistics
+- Filtering eliminates startup/shutdown artifacts
+- Aggregated results represent true steady-state performance
+
+##### Output Files
+
+- Individual run CSVs: `{matrix}__{case}__run-{N}.csv` - raw data per run
+- Aggregated CSV: `{matrix}__{case}__aggregated.csv` - combined data from all runs
+- Charts: Generated from aggregated data for visualization
+- Manifest: `benchmark_manifest.json` - summary of all generated artifacts
+
+This strategy ensures benchmarks produce consistent, reliable results that accurately
+reflect system performance under steady-state conditions.
+
 #### Benchmark Results
 
 The benchmark suite generates several charts that provide insights into system

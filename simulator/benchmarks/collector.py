@@ -44,6 +44,8 @@ class BenchmarkResultCollector:
         self._consumer_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._service: ResultConsumerService | None = None
+        self._benchmark_start_ts: float | None = None
+        self._benchmark_end_ts: float | None = None
 
     def start(self) -> None:
         logger = configure_logger(self._log_path)
@@ -84,6 +86,12 @@ class BenchmarkResultCollector:
         with self._records_lock:
             self._pending[record.script_id] = record
 
+    def set_benchmark_window(self, start_ts: float, end_ts: float) -> None:
+        """Set the measurement window for filtering warmup and cooldown periods."""
+        with self._records_lock:
+            self._benchmark_start_ts = start_ts
+            self._benchmark_end_ts = end_ts
+
     def wait_for_pending(self, timeout_s: float = 60.0) -> None:
         deadline = time.time() + timeout_s
         while time.time() < deadline:
@@ -92,9 +100,10 @@ class BenchmarkResultCollector:
                     return
             time.sleep(0.2)
 
-    def build_dataframe(self) -> pd.DataFrame:
+    def build_dataframe(self, filter_window: bool = True) -> pd.DataFrame:
         with self._records_lock:
             rows = list(self._completed)
+        
         if not rows:
             return pd.DataFrame(
                 columns=[
@@ -108,6 +117,18 @@ class BenchmarkResultCollector:
                     "latency_s",
                 ]
             )
+        
+        # Filter out warmup and cooldown periods if window is set
+        if filter_window and self._benchmark_start_ts is not None and self._benchmark_end_ts is not None:
+            filtered_rows = []
+            for row in rows:
+                sent_ts = row.get("sent_ts", 0.0)
+                # Include results that started during the measurement window
+                # (even if they completed during cooldown)
+                if self._benchmark_start_ts <= sent_ts < self._benchmark_end_ts:
+                    filtered_rows.append(row)
+            rows = filtered_rows
+        
         return pd.DataFrame(rows)
 
     def summaries(self) -> dict[str, int]:
