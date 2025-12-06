@@ -20,7 +20,7 @@ func (g *goStrategy) Prepare(ctx context.Context, lang *languageRuntime, script 
 	buildLimits := runLimits
 	buildLimits.TimeLimit = 0
 
-	containerID, cleanup, err := lang.engine.createContainer(ctx, lang, buildLimits, []string{"go", "build", "-o", goBinaryFilename, goSourceFilename}, false)
+	containerID, cleanup, err := lang.engine.createContainer(ctx, lang, buildLimits, []string{"sh", "-c", "CGO_ENABLED=0 go build -o " + goBinaryFilename + " " + goSourceFilename}, false)
 	if err != nil {
 		return nil, nil, err
 	}

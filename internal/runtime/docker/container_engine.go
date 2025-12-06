@@ -65,7 +65,9 @@ func (c *containerEngine) runProgram(
 ) (*execution.Result, error) {
 	effectiveLimits := c.effectiveLimits(limits)
 
-	containerID, cleanup, err := c.createContainer(ctx, runtime, effectiveLimits, command, attachStdin)
+	// Use run image for execution (defaults to build image if not specified)
+	runImage := runtime.runImage()
+	containerID, cleanup, err := c.createContainerWithImage(ctx, runtime, effectiveLimits, command, attachStdin, runImage)
 	if err != nil {
 		return nil, err
 	}
@@ -158,6 +160,10 @@ func (c *containerEngine) runProgram(
 }
 
 func (c *containerEngine) createContainer(ctx context.Context, runtime *languageRuntime, limits execution.RunLimits, cmd []string, attachStdin bool) (string, func(), error) {
+	return c.createContainerWithImage(ctx, runtime, limits, cmd, attachStdin, runtime.config.Image)
+}
+
+func (c *containerEngine) createContainerWithImage(ctx context.Context, runtime *languageRuntime, limits execution.RunLimits, cmd []string, attachStdin bool, image string) (string, func(), error) {
 	hostConfig := &container.HostConfig{
 		Resources: container.Resources{
 			NanoCPUs: 1_000_000_000,
@@ -171,7 +177,7 @@ func (c *containerEngine) createContainer(ctx context.Context, runtime *language
 	resp, err := c.cli.ContainerCreate(
 		ctx,
 		&container.Config{
-			Image:        runtime.config.Image,
+			Image:        image,
 			Cmd:          cmd,
 			AttachStdout: true,
 			AttachStderr: true,

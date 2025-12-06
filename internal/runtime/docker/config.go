@@ -10,6 +10,7 @@ type Config struct {
 
 // LanguageConfig specifies container settings for a single language.
 type LanguageConfig struct {
-	Image   string
-	Workdir string
+	Image    string
+	RunImage string // Optional: image to use for running (defaults to Image if empty). Useful for compiled languages where build and run images differ.
+	Workdir  string
 }

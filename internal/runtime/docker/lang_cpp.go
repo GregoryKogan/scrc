@@ -20,7 +20,7 @@ func (c *cppStrategy) Prepare(ctx context.Context, lang *languageRuntime, script
 	buildLimits := runLimits
 	buildLimits.TimeLimit = 0
 
-	containerID, cleanup, err := lang.engine.createContainer(ctx, lang, buildLimits, []string{"g++", "-O2", "-pipe", "-o", cppBinaryFilename, cppSourceFilename}, false)
+	containerID, cleanup, err := lang.engine.createContainer(ctx, lang, buildLimits, []string{"g++", "-static", "-O2", "-pipe", "-o", cppBinaryFilename, cppSourceFilename}, false)
 	if err != nil {
 		return nil, nil, err
 	}

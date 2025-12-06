@@ -74,20 +74,24 @@ func dockerConfigFromEnv() docker.Config {
 				Workdir: envOrDefault("PYTHON_WORKDIR", containerWorkdir),
 			},
 			execution.LanguageGo: {
-				Image:   envOrDefault("GO_IMAGE", goDockerImage),
-				Workdir: envOrDefault("GO_WORKDIR", containerWorkdir),
+				Image:    envOrDefault("GO_IMAGE", goDockerImage),
+				RunImage: envOrDefault("GO_RUN_IMAGE", "alpine:3.20"),
+				Workdir:  envOrDefault("GO_WORKDIR", containerWorkdir),
 			},
 			execution.LanguageC: {
-				Image:   envOrDefault("C_IMAGE", cDockerImage),
-				Workdir: envOrDefault("C_WORKDIR", containerWorkdir),
+				Image:    envOrDefault("C_IMAGE", cDockerImage),
+				RunImage: envOrDefault("C_RUN_IMAGE", "alpine:3.20"),
+				Workdir:  envOrDefault("C_WORKDIR", containerWorkdir),
 			},
 			execution.LanguageCPP: {
-				Image:   envOrDefault("CPP_IMAGE", cppDockerImage),
-				Workdir: envOrDefault("CPP_WORKDIR", containerWorkdir),
+				Image:    envOrDefault("CPP_IMAGE", cppDockerImage),
+				RunImage: envOrDefault("CPP_RUN_IMAGE", "alpine:3.20"),
+				Workdir:  envOrDefault("CPP_WORKDIR", containerWorkdir),
 			},
 			execution.LanguageJava: {
-				Image:   envOrDefault("JAVA_IMAGE", javaDockerImage),
-				Workdir: envOrDefault("JAVA_WORKDIR", containerWorkdir),
+				Image:    envOrDefault("JAVA_IMAGE", javaDockerImage),
+				RunImage: envOrDefault("JAVA_RUN_IMAGE", "eclipse-temurin:21-jre-alpine"),
+				Workdir:  envOrDefault("JAVA_WORKDIR", containerWorkdir),
 			},
 		},
 		DefaultLimits: execution.RunLimits{

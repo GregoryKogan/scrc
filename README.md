@@ -255,13 +255,22 @@ per language. This reveals:
 ### Language Runtimes
 
 Each language runtime can be customized by overriding the container image or working
-directory via environment variables:
+directory via environment variables. Compiled languages (Go, C, C++, Java) use separate
+build and run images for optimal performance:
+
+- **Build images** contain the full compiler/toolchain needed for compilation
+- **Run images** are minimal and only contain what's needed for execution
+- This separation significantly reduces container startup time and resource usage
+
+**Configuration:**
 
 - `PYTHON_IMAGE` / `PYTHON_WORKDIR` (default image `python:3.12-alpine`)
-- `GO_IMAGE` / `GO_WORKDIR` (default image `golang:1.22-alpine`)
-- `C_IMAGE` / `C_WORKDIR` (default image `gcc:14`)
-- `CPP_IMAGE` / `CPP_WORKDIR` (default image `gcc:14`)
-- `JAVA_IMAGE` / `JAVA_WORKDIR` (default image `eclipse-temurin:21-jdk-alpine`)
+- `GO_IMAGE` / `GO_RUN_IMAGE` / `GO_WORKDIR` (default build image `golang:1.22-alpine`, default run image `alpine:3.20`)
+- `C_IMAGE` / `C_RUN_IMAGE` / `C_WORKDIR` (default build image `gcc:14`, default run image `alpine:3.20`)
+- `CPP_IMAGE` / `CPP_RUN_IMAGE` / `CPP_WORKDIR` (default build image `gcc:14`, default run image `alpine:3.20`)
+- `JAVA_IMAGE` / `JAVA_RUN_IMAGE` / `JAVA_WORKDIR` (default build image `eclipse-temurin:21-jdk-alpine`, default run image `eclipse-temurin:21-jre-alpine`)
+
+**Note:** C and C++ binaries are statically linked (`-static` flag) to enable execution on minimal Alpine images. Go binaries are built with `CGO_ENABLED=0` for the same purpose.
 
 ## Script Payload
 

@@ -20,7 +20,7 @@ func (c *cStrategy) Prepare(ctx context.Context, lang *languageRuntime, script e
 	buildLimits := runLimits
 	buildLimits.TimeLimit = 0
 
-	containerID, cleanup, err := lang.engine.createContainer(ctx, lang, buildLimits, []string{"gcc", "-O2", "-pipe", "-o", cBinaryFilename, cSourceFilename}, false)
+	containerID, cleanup, err := lang.engine.createContainer(ctx, lang, buildLimits, []string{"gcc", "-static", "-O2", "-pipe", "-o", cBinaryFilename, cSourceFilename}, false)
 	if err != nil {
 		return nil, nil, err
 	}
