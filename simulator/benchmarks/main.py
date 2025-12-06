@@ -262,14 +262,6 @@ def main(argv: list[str] | None = None) -> int:
             "cases": list(throughput_summary.items()),
         }
 
-        chart_path = render_matrix_charts(
-            matrix, matrix_results, throughput_summary, output_dir
-        )
-        suite_results[matrix.label] = {
-            "chart": str(chart_path),
-            "cases": list(throughput_summary.items()),
-        }
-
     suite_manifest_path = output_dir / "benchmark_manifest.json"
     with open(suite_manifest_path, "w", encoding="utf-8") as f:
         json.dump(suite_results, f, indent=2)

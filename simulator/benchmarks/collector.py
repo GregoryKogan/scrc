@@ -103,7 +103,7 @@ class BenchmarkResultCollector:
     def build_dataframe(self, filter_window: bool = True) -> pd.DataFrame:
         with self._records_lock:
             rows = list(self._completed)
-        
+
         if not rows:
             return pd.DataFrame(
                 columns=[
@@ -117,9 +117,13 @@ class BenchmarkResultCollector:
                     "latency_s",
                 ]
             )
-        
+
         # Filter out warmup and cooldown periods if window is set
-        if filter_window and self._benchmark_start_ts is not None and self._benchmark_end_ts is not None:
+        if (
+            filter_window
+            and self._benchmark_start_ts is not None
+            and self._benchmark_end_ts is not None
+        ):
             filtered_rows = []
             for row in rows:
                 sent_ts = row.get("sent_ts", 0.0)
@@ -128,15 +132,34 @@ class BenchmarkResultCollector:
                 if self._benchmark_start_ts <= sent_ts < self._benchmark_end_ts:
                     filtered_rows.append(row)
             rows = filtered_rows
-        
+
+        # If filtering resulted in no rows, return schema-defined empty DataFrame
+        if not rows:
+            return pd.DataFrame(
+                columns=[
+                    "script_id",
+                    "language",
+                    "outcome",
+                    "status",
+                    "duration_ms",
+                    "sent_ts",
+                    "completed_ts",
+                    "latency_s",
+                ]
+            )
+
         return pd.DataFrame(rows)
 
     def summaries(self) -> dict[str, int]:
         with self._records_lock:
-            counter = collections.Counter(record["status"] for record in self._completed)
+            counter = collections.Counter(
+                record["status"] for record in self._completed
+            )
         return dict(counter)
 
-    def _handle_result(self, script_id: str, payload: dict[str, Any], completed_ts: float) -> None:
+    def _handle_result(
+        self, script_id: str, payload: dict[str, Any], completed_ts: float
+    ) -> None:
         with self._records_lock:
             record = self._pending.pop(script_id, None)
         if record is None:
@@ -157,4 +180,3 @@ class BenchmarkResultCollector:
         }
         with self._records_lock:
             self._completed.append(row)
-
