@@ -219,7 +219,15 @@ def main(argv: list[str] | None = None) -> int:
                     # Build dataframe with filtering enabled
                     df = collector.build_dataframe(filter_window=True)
                     run_dataframes.append(df)
-                    run_throughputs.append(stats.throughput_per_minute)
+
+                    # Calculate throughput from completed submissions, not sent submissions
+                    # Use the actual measurement window duration
+                    measurement_duration_s = benchmark_end_ts - benchmark_start_ts
+                    if measurement_duration_s > 0 and len(df) > 0:
+                        completed_throughput = len(df) / measurement_duration_s * 60.0
+                    else:
+                        completed_throughput = 0.0
+                    run_throughputs.append(completed_throughput)
 
                     # Save individual run CSV
                     df_path = (
@@ -227,11 +235,12 @@ def main(argv: list[str] | None = None) -> int:
                     )
                     df.to_csv(df_path, index=False)
                     LOGGER.info(
-                        "  Saved run %d results to %s (%d rows, throughput %.2f submissions/min)",
+                        "  Saved run %d results to %s (%d rows, sent throughput %.2f, completed throughput %.2f submissions/min)",
                         run_num,
                         df_path,
                         len(df),
                         stats.throughput_per_minute,
+                        completed_throughput,
                     )
 
                 # Aggregate results across all runs

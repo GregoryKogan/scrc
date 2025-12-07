@@ -114,6 +114,8 @@ def _render_violin_chart(
     boxplot_path = output_dir / "language_latency_boxplot.png"
     fig2, ax2 = plt.subplots(figsize=(14, 8))
     _render_faceted_boxplots(df, language_order, outcome_order, ax2)
+    # Adjust layout to prevent legend overlap - leave space on right for legend
+    plt.tight_layout(rect=[0, 0, 0.92, 1])  # Leave 8% space on right for legend
     fig2.savefig(
         boxplot_path, bbox_inches="tight", facecolor="white", edgecolor="none", dpi=300
     )
@@ -211,25 +213,27 @@ def _render_faceted_boxplots(
         ax=ax,
         linewidth=1.5,
         width=0.7,
+        showfliers=False,  # Hide outliers
     )
 
     ax.set_xlabel("Language", fontweight="semibold", labelpad=12, fontsize=12)
     ax.set_ylabel("Latency (seconds)", fontweight="semibold", labelpad=12, fontsize=12)
     ax.set_ylim(bottom=0)
 
-    # Improve legend
+    # Improve legend - position outside plot area to avoid overlap
     handles, labels = ax.get_legend_handles_labels()
     ax.legend(
         handles=handles,
         labels=[label.upper() for label in labels],
-        loc="upper right",
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1),  # Position outside the plot area
         frameon=True,
         fancybox=True,
         shadow=True,
         title="Outcome",
         title_fontsize=10,
         fontsize=9,
-        ncol=len(outcome_order),
+        ncol=1,  # Single column for vertical layout
     )
 
     ax.set_title(
