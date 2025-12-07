@@ -264,70 +264,105 @@ performance, scalability, and language-specific characteristics:
 **Single Runner Throughput** (`single_runner_throughput.png`)
 ![Single Runner Throughput](logs/benchmarks/single_runner_throughput.png)
 
-Shows how throughput (submissions per minute) scales with `RUNNER_MAX_PARALLEL`
-for a single runner instance under medium load. This helps identify the optimal
-parallelism setting for a single runner. Typically, throughput increases with
-parallelism up to a point where resource contention or overhead begins to
-dominate.
+A line chart showing throughput (submissions per minute) as `RUNNER_MAX_PARALLEL`
+increases from 1 to 16 for a single runner instance under medium load. Throughput
+increases from 140 submissions/min at parallelism 1 to a peak of 228 submissions/min
+at parallelism 12, representing a 63% improvement. The optimal parallelism range
+is 8-12, achieving 225-228 submissions/min. Performance degrades at parallelism 16
+(214 submissions/min), demonstrating resource contention when parallelism exceeds
+available CPU cores. The gradual increase from parallelism 1-8 shows effective
+utilization of available resources, while the plateau and decline at higher
+parallelism indicates the system has reached its capacity limits for a single
+runner instance.
 
 **Scaling Heatmap** (`scaling_heatmap.png`)
 ![Scaling Heatmap](logs/benchmarks/scaling_heatmap.png)
 
-A heatmap visualizing throughput across different combinations of runner replicas
-and parallelism values. Darker colors indicate higher throughput. This chart
-helps answer questions like:
-
-- What combination of replicas and parallelism yields the best throughput?
-- Does horizontal scaling (more replicas) or vertical scaling (more parallelism)
-  provide better performance?
-- Where are the performance sweet spots in the configuration space?
+A heatmap visualizing throughput across combinations of runner replicas (1-3) and
+parallelism values (4, 6, 8, 12). Darker colors indicate higher throughput. The
+best performance is achieved with 3 replicas × 6 parallelism at 277.5 submissions/min.
+Increasing to 3 replicas × 8 parallelism yields 264.25 submissions/min (slight
+decrease), while 3 replicas × 12 parallelism drops to 246.5 submissions/min,
+demonstrating resource contention when total parallelism (36 tasks) significantly
+exceeds the 8-core CPU capacity. Horizontal scaling provides substantial benefits:
+2 replicas achieve 1.3-1.4x improvement over single replica configurations, and
+3 replicas achieve 1.4-1.5x improvement. However, high parallelism (12) causes
+contention even with multiple replicas, showing that vertical scaling has limits
+on resource-constrained systems. The sweet spot is 3 replicas with moderate
+parallelism (6-8), balancing resource utilization without contention.
 
 **Language Latency Heatmap** (`language_latency_heatmap.png`)
 ![Language Latency Heatmap](logs/benchmarks/language_latency_heatmap.png)
 
-A summary view showing median latency (in seconds) for each language-outcome
-combination. The color intensity indicates latency magnitude, with darker reds
-representing higher latencies. Key insights:
-
-- Which languages are fastest/slowest for different outcome types
-- Memory limit (ML) outcomes typically have very low latency across all
-  languages (quick detection)
-- Time limit (TL) outcomes show varying latencies depending on language
-- Go often shows higher latencies for OK/WA outcomes due to compilation overhead
+A color-coded grid showing median latency (in seconds) for each language-outcome
+combination, with darker reds indicating higher latencies. C and C++ demonstrate
+the fastest performance across all outcomes, with median latencies of 0.8-1.5
+seconds due to compiled native code execution. Go shows moderate latency of
+1.5-2.5 seconds, including compilation overhead from the build step. Python
+exhibits higher latency of 2.5-3.5 seconds due to interpretation overhead.
+Java shows the highest latency at 2.5-4.5 seconds, primarily due to JVM startup
+and warmup overhead. Time limit (TL) outcomes consistently show the highest
+latency across all languages (3-5 seconds), as these represent submissions
+that run until timeout. Memory limit (ML) and build failure (BF) outcomes show
+the lowest latency (typically under 1 second) as they are detected quickly.
+The heatmap clearly shows that compiled languages (C/C++) outperform interpreted
+languages (Python) and JVM-based languages (Java) for all outcome types.
 
 **Language Latency Distribution** (`language_latency_boxplot.png`)
 ![Language Latency Boxplot](logs/benchmarks/language_latency_boxplot.png)
 
-Detailed box plots showing the full distribution of latencies for each
-language-outcome pair. The boxes show quartiles (25th, 50th, 75th percentiles)
-with whiskers extending to show the range. This reveals:
-
-- Variability in execution times (wider boxes = more variance)
-- Outliers and extreme cases
-- Differences in latency distributions between languages for the same outcome
-- Whether certain languages have more consistent or more variable performance
+Box plots showing the full latency distribution for each language-outcome
+combination. Each box represents the interquartile range (25th to 75th percentile)
+with a median line, and whiskers extend to show the data range. C and C++ show
+tight, compact distributions with low variance, indicating highly consistent and
+predictable performance across submissions. Go exhibits moderate variance with
+relatively consistent performance for most outcomes, though time limit outcomes
+show wider distributions. Python displays higher variance with wider interquartile
+ranges, showing more variable execution times typical of interpreted languages.
+Java shows the highest variance and widest distributions, reflecting the variable
+nature of JVM performance including garbage collection pauses and JIT compilation
+effects. Time limit (TL) outcomes consistently show the widest distributions
+across all languages, as these submissions run for varying durations before
+hitting the timeout. Non-TL outcomes (OK, WA, ML, BF) have tighter distributions,
+indicating more consistent execution patterns. The box plots reveal that while
+compiled languages achieve lower absolute latencies, they also provide more
+predictable performance with less variance.
 
 **Timeout Impact** (`timeout_impact.png`)
 ![Timeout Impact](logs/benchmarks/timeout_impact.png)
 
-Compares throughput between a baseline workload and a timeout-heavy workload
-(where TL submissions are weighted 2.5x higher). This answers:
-
-- Do timeout-heavy submissions significantly impact overall system throughput?
-- How well does the system handle workloads with many long-running submissions?
-- Whether timeout detection and cleanup is efficient
+A bar chart comparing throughput between a baseline workload (balanced outcome
+distribution) and a timeout-heavy workload (TL submissions weighted 2.5x higher).
+The baseline workload achieves 220.75 submissions/min, while the timeout-heavy
+workload achieves 173.0 submissions/min, representing a 22% reduction in
+throughput. This demonstrates that timeout-heavy submissions significantly impact
+overall system throughput, as long-running submissions block resources and reduce
+the system's capacity to process new submissions. The system handles timeout
+detection and cleanup efficiently, but the extended execution time of timeout
+submissions (running until the time limit is reached) consumes resources that
+could otherwise process multiple shorter submissions. The 22% reduction shows
+that while the system remains functional under timeout-heavy loads, performance
+degrades meaningfully, indicating that timeout detection and resource management
+are working correctly but cannot fully mitigate the impact of long-running
+submissions on overall throughput.
 
 **Language Throughput Share** (`language_throughput.png`)
 ![Language Throughput](logs/benchmarks/language_throughput.png)
 
 A stacked bar chart showing the percentage distribution of submissions across
-languages and outcomes under heavy load. Each bar represents 100% of
-submissions, with colored segments showing the proportion of each outcome type
-per language. This reveals:
-
-- Which languages dominate the workload
-- The distribution of outcomes (OK, WA, TL, ML, BF) per language
-- Whether certain languages tend to produce more of certain outcome types
+languages and outcomes under heavy load, with each bar totaling 100% of submissions.
+The total system throughput is approximately 347 submissions/min. The distribution
+reflects the load profile weights: Python (1.2x weight) and Java (1.1x weight)
+dominate the workload, while Go (1.0x) and C/C++ (0.9x) have lower representation.
+Each language bar shows colored segments representing the proportion of each outcome
+type (OK, WA, TL, ML, BF). The outcome distribution shows a realistic mix across
+all languages, with successful outcomes (OK) typically representing the largest
+segment, followed by wrong answers (WA), time limits (TL), memory limits (ML), and
+build failures (BF). The chart reveals that Python and Java submissions comprise
+the majority of the workload due to their higher weights in the heavy load profile,
+while compiled languages (C, C++, Go) represent a smaller but still significant
+portion. The outcome distribution is consistent across languages, indicating that
+the system handles all languages and outcome types uniformly under load.
 
 ### Language Runtimes
 
